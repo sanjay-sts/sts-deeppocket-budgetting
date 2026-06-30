@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Fixtures, BudgetMode, CategoryId, Transaction } from '../types';
 import { loadFixtures } from '../data/api';
+import * as api from '../data/api';
 import { latestMonthKey } from '../lib/kpi';
 
 interface AppState {
@@ -12,6 +13,13 @@ interface AppState {
   setSelectedMonth: (ym: string) => void;
   setBudgetMode: (mode: BudgetMode) => void;
   reclassifyTransaction: (txId: string, categoryId: CategoryId) => void;
+  refetch: () => Promise<void>;
+  addPerson: (b: { name: string; role: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
+  editPerson: (id: string, b: { name?: string; role?: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
+  removePerson: (id: string) => Promise<void>;
+  addAccount: (b: { personId: string; institution: string; accountType: string; kind?: string; name?: string; beneficiaryId?: string }) => Promise<void>;
+  editAccount: (id: string, b: Record<string, unknown>) => Promise<void>;
+  removeAccount: (id: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -42,4 +50,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     set({ fixtures: { ...f, transactions: txs } });
   },
+
+  refetch: async () => {
+    const f = await loadFixtures();
+    set({ fixtures: f });
+  },
+  addPerson: async (b) => { await api.createPerson(b); await get().refetch(); },
+  editPerson: async (id, b) => { await api.updatePerson(id, b); await get().refetch(); },
+  removePerson: async (id) => { await api.deletePerson(id); await get().refetch(); },
+  addAccount: async (b) => { await api.createAccount(b); await get().refetch(); },
+  editAccount: async (id, b) => { await api.updateAccount(id, b); await get().refetch(); },
+  removeAccount: async (id) => { await api.deleteAccount(id); await get().refetch(); },
 }));
