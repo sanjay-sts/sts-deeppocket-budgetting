@@ -65,3 +65,17 @@ export async function importInvestmentsCsv(file: File): Promise<ImportSummary> {
   fd.append('file', file);
   return json<ImportSummary>(await fetch(`${BASE}/api/import/investments-csv`, { method: 'POST', body: fd }));
 }
+
+import type { ContributionEvent, ContributionKind } from '../types';
+
+interface ContributionInput {
+  accountId: string; personId: string; date: string;
+  amount: number; kind: ContributionKind; beneficiaryId?: string;
+}
+
+export const createContribution = (b: ContributionInput) =>
+  send<ContributionEvent>('POST', '/api/contributions', b);
+export const updateContribution = (id: string, b: Partial<ContributionInput>) =>
+  send<ContributionEvent>('PUT', `/api/contributions/${id}`, b);
+export const deleteContribution = (id: string) =>
+  send<void>('DELETE', `/api/contributions/${id}`);
