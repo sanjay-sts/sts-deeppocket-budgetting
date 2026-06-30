@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import CORS_ORIGINS
 from .db import init_db
-from .routers import data, people, accounts, snapshots, imports
+from .routers import data, people, accounts, snapshots, imports, contributions
 
 app = FastAPI(title="DeepPocket API")
 
@@ -20,6 +20,7 @@ app.include_router(people.router)
 app.include_router(accounts.router)
 app.include_router(snapshots.router)
 app.include_router(imports.router)
+app.include_router(contributions.router)
 
 
 @app.on_event("startup")
