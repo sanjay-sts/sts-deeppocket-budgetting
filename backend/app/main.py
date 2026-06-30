@@ -1,0 +1,23 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import CORS_ORIGINS
+from .db import init_db
+from .routers import data
+
+app = FastAPI(title="DeepPocket API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(data.router)
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    init_db()
