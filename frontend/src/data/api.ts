@@ -45,3 +45,23 @@ export const createAccount = (b: AccountInput) => send<Account>('POST', '/api/ac
 export const updateAccount = (id: string, b: Partial<AccountInput>) =>
   send<Account>('PUT', `/api/accounts/${id}`, b);
 export const deleteAccount = (id: string) => send<void>('DELETE', `/api/accounts/${id}`);
+
+export interface SnapshotRow { id: string; accountId: string; date: string; amount: number }
+export interface ImportSummary {
+  created: number; updated: number; skipped: number;
+  errors: { row: number; reason: string }[];
+}
+
+export const listSnapshots = (accountId: string) =>
+  send<SnapshotRow[]>('GET', `/api/snapshots?account_id=${encodeURIComponent(accountId)}`);
+export const upsertSnapshot = (b: { accountId: string; date: string; amount: number }) =>
+  send<SnapshotRow>('POST', '/api/snapshots', b);
+export const updateSnapshot = (id: string, b: { date?: string; amount?: number }) =>
+  send<SnapshotRow>('PUT', `/api/snapshots/${id}`, b);
+export const deleteSnapshot = (id: string) => send<void>('DELETE', `/api/snapshots/${id}`);
+
+export async function importInvestmentsCsv(file: File): Promise<ImportSummary> {
+  const fd = new FormData();
+  fd.append('file', file);
+  return json<ImportSummary>(await fetch(`${BASE}/api/import/investments-csv`, { method: 'POST', body: fd }));
+}
