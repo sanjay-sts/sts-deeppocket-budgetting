@@ -1,88 +1,50 @@
-import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import type { ImportSummary } from '../data/api';
 
 export function Import() {
-  const fixtures = useAppStore((s) => s.fixtures)!;
-  const counts = {
-    bank: fixtures.transactions.filter((t) => {
-      const acc = fixtures.accounts.find((a) => a.id === t.accountId);
-      return acc && (acc.kind === 'chequing' || acc.kind === 'savings');
-    }).length,
-    cc: fixtures.transactions.filter((t) => {
-      const acc = fixtures.accounts.find((a) => a.id === t.accountId);
-      return acc?.kind === 'credit_card';
-    }).length,
-    inv: fixtures.investments.length,
-  };
+  const importCsv = useAppStore((s) => s.importCsv);
+  const [file, setFile] = useState<File | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <div className="flex items-center gap-3">
-          <Badge tone="info">M1 · stub</Badge>
-          <div className="text-sm text-ink-muted">
-            In Milestone 2 this screen accepts real CSVs. For now it shows the fixture the mock generator produced.
-          </div>
-        </div>
-      </Card>
+  async function run() {
+    if (!file) return;
+    setError(''); setBusy(true); setSummary(null);
+    try {
+      setSummary(await importCsv(file));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SourceCard
-          title="Chequing & savings"
-          schema="Date, Transaction_detail, withdrawal, deposit, running_total, account"
-          file="mock/out/bank_transactions.csv"
-          count={counts.bank}
-          label="rows"
-        />
-        <SourceCard
-          title="Credit card bills"
-          schema="Date, merchant, amount, payment, running_total, account"
-          file="mock/out/credit_card.csv"
-          count={counts.cc}
-          label="rows"
-        />
-        <SourceCard
-          title="Investment snapshots"
-          schema="date, person, institution, account_type, amount"
-          file="mock/out/investments.csv"
-          count={counts.inv}
-          label="monthly rows"
-        />
-      </div>
-
-      <Card title="What Milestone 2 adds">
-        <ul className="text-sm text-ink-muted space-y-2 list-disc list-inside">
-          <li>Drag-and-drop CSV upload with source-type picker</li>
-          <li>Auto-detect columns and preview before committing</li>
-          <li>Duplicate-detection (date + amount + merchant fuzzy match)</li>
-          <li>Auto-categorize preview with the rules engine</li>
-          <li>Commit to FastAPI backend + SQLite</li>
-        </ul>
-      </Card>
-    </div>
-  );
-}
-
-function SourceCard({
-  title,
-  schema,
-  file,
-  count,
-  label,
-}: {
-  title: string;
-  schema: string;
-  file: string;
-  count: number;
-  label: string;
-}) {
   return (
     <Card>
-      <div className="text-sm font-medium text-ink">{title}</div>
-      <div className="text-xs text-ink-dim mt-1 font-mono">{schema}</div>
-      <div className="mt-4 num text-2xl text-ink">{count.toLocaleString('en-CA')}</div>
-      <div className="text-xs text-ink-dim">{label} in {file}</div>
+      <h1 className="text-xl font-semibold mb-2">Import investments CSV</h1>
+      <p className="text-sm text-gray-500 mb-3">
+        Columns: <code>date, person, institution, account_type, amount</code>.
+        Dates may be <code>YYYYMMDD</code> or <code>YYYY-MM-DD</code>. Missing people/accounts are created automatically.
+      </p>
+      <div className="flex gap-2 items-center mb-3">
+        <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <Button onClick={run} disabled={!file || busy}>{busy ? 'Importing…' : 'Import'}</Button>
+      </div>
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {summary && (
+        <div className="text-sm">
+          <p>Created {summary.created} · Updated {summary.updated} · Skipped {summary.skipped}</p>
+          {summary.errors.length > 0 && (
+            <ul className="mt-2 text-red-600 list-disc pl-5">
+              {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
