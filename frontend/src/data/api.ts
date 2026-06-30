@@ -1,9 +1,19 @@
 // Single seam between the UI and the data source.
-// M1 reads the bundled fixtures.json; M2 swaps this to fetch from FastAPI.
+// M2: reads from the FastAPI backend over HTTP. This is the ONLY module that
+// knows where data comes from — screens never fetch directly.
 
 import type { Fixtures } from '../types';
-import fixturesJson from './fixtures.json';
+
+const BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+
+async function json<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  }
+  return res.json() as Promise<T>;
+}
 
 export async function loadFixtures(): Promise<Fixtures> {
-  return fixturesJson as unknown as Fixtures;
+  return json<Fixtures>(await fetch(`${BASE}/api/data`));
 }
