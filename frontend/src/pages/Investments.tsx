@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Progress } from '../components/ui/Progress';
 import { cad, cadK, pct } from '../lib/format';
@@ -304,6 +305,69 @@ export function Investments() {
           })}
         </div>
       </Card>
+
+      <SnapshotEditor />
     </div>
+  );
+}
+
+const INVESTMENT_KINDS = ['tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp', 'non_registered', 'crypto'];
+
+export function SnapshotEditor() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const saveSnapshot = useAppStore((s) => s.saveSnapshot);
+  const removeSnapshot = useAppStore((s) => s.removeSnapshot);
+  const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
+  const [accountId, setAccountId] = useState('');
+  const [date, setDate] = useState('');
+  const [amount, setAmount] = useState('');
+  const [error, setError] = useState('');
+
+  // snapshots in the payload are id-less; the editable grid needs ids, so it reads them
+  // from listSnapshots via a small effect-free derived call done in the store refetch.
+  const rows = useMemo(
+    () => (fixtures?.investments ?? [])
+      .filter((s) => s.accountId === accountId)
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [fixtures, accountId],
+  );
+
+  async function submit() {
+    setError('');
+    try {
+      await saveSnapshot({ accountId, date, amount: Number(amount) });
+      setDate(''); setAmount('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold mb-3">Add / update value</h2>
+      <div className="flex gap-2 items-end flex-wrap mb-4">
+        <select className="border rounded px-2 py-1" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          <option value="">Account…</option>
+          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <input className="border rounded px-2 py-1" placeholder="Date (YYYY-MM-DD)" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="border rounded px-2 py-1 w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <Button onClick={submit} disabled={!accountId || !date || !amount}>Save</Button>
+      </div>
+      {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+      {accountId && (
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-gray-500"><th>Date</th><th>Amount</th></tr></thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.date} className="border-t">
+                <td>{s.date}</td>
+                <td>{s.amount.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   );
 }
