@@ -23,6 +23,9 @@ interface AppState {
   saveSnapshot: (b: { accountId: string; date: string; amount: number }) => Promise<void>;
   editSnapshot: (id: string, b: { date?: string; amount?: number }) => Promise<void>;
   removeSnapshot: (id: string) => Promise<void>;
+  addContribution: (b: { accountId: string; personId: string; date: string; amount: number; kind: import('../types').ContributionKind; beneficiaryId?: string }) => Promise<void>;
+  editContribution: (id: string, b: Record<string, unknown>) => Promise<void>;
+  removeContribution: (id: string) => Promise<void>;
   importCsv: (file: File) => Promise<import('../data/api').ImportSummary>;
 }
 
@@ -68,6 +71,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   saveSnapshot: async (b) => { await api.upsertSnapshot(b); await get().refetch(); },
   editSnapshot: async (id, b) => { await api.updateSnapshot(id, b); await get().refetch(); },
   removeSnapshot: async (id) => { await api.deleteSnapshot(id); await get().refetch(); },
+  addContribution: async (b) => { await api.createContribution(b); await get().refetch(); },
+  editContribution: async (id, b) => { await api.updateContribution(id, b as never); await get().refetch(); },
+  removeContribution: async (id) => { await api.deleteContribution(id); await get().refetch(); },
   importCsv: async (file) => {
     const summary = await api.importInvestmentsCsv(file);
     await get().refetch();
