@@ -1,8 +1,125 @@
+import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
 import { Badge } from '../components/ui/Badge';
 import type { BudgetMode } from '../types';
+
+function HouseholdSection() {
+  const household = useAppStore((s) => s.fixtures?.household ?? []);
+  const addPerson = useAppStore((s) => s.addPerson);
+  const removePerson = useAppStore((s) => s.removePerson);
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<'adult' | 'child'>('adult');
+  const [birthYear, setBirthYear] = useState('');
+  const [error, setError] = useState('');
+
+  async function submit() {
+    setError('');
+    try {
+      await addPerson({ name, role, birthYear: birthYear ? Number(birthYear) : undefined });
+      setName(''); setBirthYear('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold mb-3">Household</h2>
+      <table className="w-full text-sm mb-3">
+        <thead><tr className="text-left text-gray-500"><th>Name</th><th>Role</th><th>Birth year</th><th></th></tr></thead>
+        <tbody>
+          {household.map((p) => (
+            <tr key={p.id} className="border-t">
+              <td>{p.name}</td><td>{p.role}</td><td>{p.birthYear ?? '—'}</td>
+              <td className="text-right">
+                <button className="text-red-600" onClick={async () => {
+                  setError('');
+                  try { await removePerson(p.id); } catch (e) { setError((e as Error).message); }
+                }}>Remove</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex gap-2 items-end">
+        <input className="border rounded px-2 py-1" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="border rounded px-2 py-1" value={role} onChange={(e) => setRole(e.target.value as 'adult' | 'child')}>
+          <option value="adult">adult</option>
+          <option value="child">child</option>
+        </select>
+        <input className="border rounded px-2 py-1 w-28" placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
+        <Button onClick={submit} disabled={!name}>Add member</Button>
+      </div>
+      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+    </Card>
+  );
+}
+
+const INVESTMENT_KINDS = ['tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp', 'non_registered', 'crypto'];
+
+function InvestmentAccountsSection() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const addAccount = useAppStore((s) => s.addAccount);
+  const removeAccount = useAppStore((s) => s.removeAccount);
+  const people = fixtures?.household ?? [];
+  const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
+  const kids = people.filter((p) => p.role === 'child');
+  const [form, setForm] = useState({ personId: '', institution: '', accountType: '', beneficiaryId: '' });
+  const [error, setError] = useState('');
+
+  async function submit() {
+    setError('');
+    try {
+      await addAccount({
+        personId: form.personId, institution: form.institution, accountType: form.accountType,
+        beneficiaryId: form.beneficiaryId || undefined,
+      });
+      setForm({ personId: '', institution: '', accountType: '', beneficiaryId: '' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold mb-3">Investment accounts</h2>
+      <table className="w-full text-sm mb-3">
+        <thead><tr className="text-left text-gray-500"><th>Owner</th><th>Institution</th><th>Type</th><th>Kind</th><th></th></tr></thead>
+        <tbody>
+          {accounts.map((a) => (
+            <tr key={a.id} className="border-t">
+              <td>{people.find((p) => p.id === a.ownerIds[0])?.name ?? '—'}</td>
+              <td>{a.institution}</td><td>{a.name}</td><td>{a.kind}</td>
+              <td className="text-right">
+                <button className="text-red-600" onClick={async () => {
+                  setError('');
+                  try { await removeAccount(a.id); } catch (e) { setError((e as Error).message); }
+                }}>Remove</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex gap-2 items-end flex-wrap">
+        <select className="border rounded px-2 py-1" value={form.personId} onChange={(e) => setForm({ ...form, personId: e.target.value })}>
+          <option value="">Owner…</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <input className="border rounded px-2 py-1" placeholder="Institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
+        <input className="border rounded px-2 py-1" placeholder="Account type (e.g. tfsa, dccp2)" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
+        <select className="border rounded px-2 py-1" value={form.beneficiaryId} onChange={(e) => setForm({ ...form, beneficiaryId: e.target.value })}>
+          <option value="">RESP beneficiary (optional)…</option>
+          {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+        </select>
+        <Button onClick={submit} disabled={!form.personId || !form.institution || !form.accountType}>Add account</Button>
+      </div>
+      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+    </Card>
+  );
+}
 
 const modeDescriptions: Record<BudgetMode, { title: string; text: string }> = {
   envelope: {
@@ -41,6 +158,10 @@ export function Settings() {
           ))}
         </div>
       </Card>
+
+      <HouseholdSection />
+
+      <InvestmentAccountsSection />
 
       <Card title="Budget mode" subtitle="Switchable any time">
         <Tabs
