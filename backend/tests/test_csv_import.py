@@ -45,3 +45,13 @@ def test_import_reports_bad_rows(session):
 def test_import_rejects_wrong_header(session):
     summary = import_investment_csv("foo,bar\n1,2\n", session)
     assert summary["errors"] and summary["errors"][0]["row"] == 0
+
+
+def test_import_endpoint_multipart(client):
+    csv_bytes = (HEADER + "20250131,sanjay,questrade,tfsa,10000\n").encode("utf-8")
+    r = client.post(
+        "/api/import/investments-csv",
+        files={"file": ("snap.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    assert r.json()["created"] == 1
