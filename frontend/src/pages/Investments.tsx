@@ -18,7 +18,7 @@ import { cad, cadK, pct } from '../lib/format';
 import { contributionRoomUsed, cesgStatusPerKid, estimateMarginalRate } from '../lib/canadian';
 import { MoneyCell } from '../components/shared/MoneyCell';
 import { monthKey } from '../lib/format';
-import type { AccountKind } from '../types';
+import type { AccountKind, ContributionKind } from '../types';
 
 const KIND_COLORS: Record<AccountKind, string> = {
   chequing: '#64748b',
@@ -307,7 +307,76 @@ export function Investments() {
       </Card>
 
       <SnapshotEditor />
+      <ContributionsEditor />
     </div>
+  );
+}
+
+const CONTRIBUTION_KINDS_LIST: ContributionKind[] = ['rrsp', 'tfsa', 'resp', 'fhsa'];
+
+export function ContributionsEditor() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const addContribution = useAppStore((s) => s.addContribution);
+  const removeContribution = useAppStore((s) => s.removeContribution);
+  const people = fixtures?.household ?? [];
+  const accounts = fixtures?.accounts ?? [];
+  const kids = people.filter((p) => p.role === 'child');
+  const events = (fixtures?.contributionEvents ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
+  const [f, setF] = useState({ accountId: '', personId: '', kind: 'rrsp' as ContributionKind, date: '', amount: '', beneficiaryId: '' });
+  const [error, setError] = useState('');
+
+  async function submit() {
+    setError('');
+    try {
+      await addContribution({
+        accountId: f.accountId, personId: f.personId, kind: f.kind,
+        date: f.date, amount: Number(f.amount),
+        beneficiaryId: f.kind === 'resp' ? f.beneficiaryId || undefined : undefined,
+      });
+      setF({ ...f, date: '', amount: '' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold mb-3">Contributions (RRSP / TFSA / RESP / FHSA)</h2>
+      <div className="flex gap-2 items-end flex-wrap mb-3">
+        <select className="border rounded px-2 py-1" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
+          <option value="">Contributor…</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="border rounded px-2 py-1" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+          <option value="">Account…</option>
+          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select className="border rounded px-2 py-1" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as ContributionKind })}>
+          {CONTRIBUTION_KINDS_LIST.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        {f.kind === 'resp' && (
+          <select className="border rounded px-2 py-1" value={f.beneficiaryId} onChange={(e) => setF({ ...f, beneficiaryId: e.target.value })}>
+            <option value="">Beneficiary…</option>
+            {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+          </select>
+        )}
+        <input className="border rounded px-2 py-1" placeholder="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <input className="border rounded px-2 py-1 w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <Button onClick={submit} disabled={!f.personId || !f.accountId || !f.date || !f.amount || (f.kind === 'resp' && !f.beneficiaryId)}>Add</Button>
+      </div>
+      {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+      <table className="w-full text-sm">
+        <thead><tr className="text-left text-gray-500"><th>Date</th><th>Kind</th><th>Amount</th><th></th></tr></thead>
+        <tbody>
+          {events.map((e) => (
+            <tr key={e.id} className="border-t">
+              <td>{e.date}</td><td>{e.kind}</td><td>{e.amount.toLocaleString()}</td>
+              <td className="text-right"><button className="text-red-600" onClick={() => removeContribution(e.id)}>Delete</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
