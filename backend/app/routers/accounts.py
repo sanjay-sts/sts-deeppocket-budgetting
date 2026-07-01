@@ -5,6 +5,7 @@ from ..db import get_session
 from ..constants import new_id, normalize_kind
 from ..models import Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
 from ..schemas import AccountCreate, AccountUpdate
+from ..services.deletion import cascade_delete_account
 from ..services.fixtures import _account_out
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
@@ -123,19 +124,26 @@ def update_account(account_id: str, body: AccountUpdate, session: Session = Depe
 
 
 @router.delete("/{account_id}", status_code=204)
-def delete_account(account_id: str, session: Session = Depends(get_session)):
+def delete_account(account_id: str, cascade: bool = False, session: Session = Depends(get_session)):
     a = session.get(Account, account_id)
     if not a:
         raise HTTPException(404, "Account not found")
-    snapshot_count = len(session.exec(
-        select(InvestmentSnapshot).where(InvestmentSnapshot.account_id == account_id)).all())
-    contribution_count = len(session.exec(
-        select(Contribution).where(Contribution.account_id == account_id)).all())
-    if snapshot_count or contribution_count:
-        raise HTTPException(409, detail={
-            "message": "This account still has dependent data. Remove it first.",
-            "snapshotCount": snapshot_count,
-            "contributionCount": contribution_count,
-        })
-    session.delete(a)
+    if not cascade:
+        # Safe default: block with structured counts when dependent data exists.
+        snapshot_count = len(session.exec(
+            select(InvestmentSnapshot).where(InvestmentSnapshot.account_id == account_id)).all())
+        contribution_count = len(session.exec(
+            select(Contribution).where(Contribution.account_id == account_id)).all())
+        if snapshot_count or contribution_count:
+            raise HTTPException(409, detail={
+                "message": "This account still has dependent data. Remove it first.",
+                "snapshotCount": snapshot_count,
+                "contributionCount": contribution_count,
+            })
+    # Force-delete ("Delete anyway") and the no-dependents success path both flow here.
+    # On the non-cascade path there are zero snapshots/contributions, so the helper just
+    # removes the owner/beneficiary join rows + the account (behavior unchanged); the join
+    # rows must go too, or they outlive the account and wrongly block deleting those people
+    # later (an owner/beneficiary "of a ghost account").
+    cascade_delete_account(session, account_id)
     session.commit()
