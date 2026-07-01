@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Fixtures, BudgetMode, CategoryId, Transaction } from '../types';
 import { loadFixtures } from '../data/api';
 import * as api from '../data/api';
+import type { PurgeMode } from '../data/api';
 import { latestMonthKey } from '../lib/kpi';
 
 interface AppState {
@@ -16,10 +17,10 @@ interface AppState {
   refetch: () => Promise<void>;
   addPerson: (b: { name: string; role: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
   editPerson: (id: string, b: { name?: string; role?: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
-  removePerson: (id: string) => Promise<void>;
+  removePerson: (id: string, cascade?: boolean) => Promise<void>;
   addAccount: (b: { personIds: string[]; institution: string; accountType: string; kind?: string; name?: string; beneficiaryIds?: string[] }) => Promise<void>;
   editAccount: (id: string, b: Record<string, unknown>) => Promise<void>;
-  removeAccount: (id: string) => Promise<void>;
+  removeAccount: (id: string, cascade?: boolean) => Promise<void>;
   saveSnapshot: (b: { accountId: string; date: string; amount: number }) => Promise<void>;
   editSnapshot: (id: string, b: { date?: string; amount?: number }) => Promise<void>;
   removeSnapshot: (id: string) => Promise<void>;
@@ -27,6 +28,7 @@ interface AppState {
   editContribution: (id: string, b: Record<string, unknown>) => Promise<void>;
   removeContribution: (id: string) => Promise<void>;
   importCsv: (file: File) => Promise<import('../data/api').ImportSummary>;
+  purgeData: (mode: PurgeMode) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -64,10 +66,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   addPerson: async (b) => { await api.createPerson(b); await get().refetch(); },
   editPerson: async (id, b) => { await api.updatePerson(id, b); await get().refetch(); },
-  removePerson: async (id) => { await api.deletePerson(id); await get().refetch(); },
+  removePerson: async (id, cascade) => { await api.deletePerson(id, cascade); await get().refetch(); },
   addAccount: async (b) => { await api.createAccount(b); await get().refetch(); },
   editAccount: async (id, b) => { await api.updateAccount(id, b); await get().refetch(); },
-  removeAccount: async (id) => { await api.deleteAccount(id); await get().refetch(); },
+  removeAccount: async (id, cascade) => { await api.deleteAccount(id, cascade); await get().refetch(); },
   saveSnapshot: async (b) => { await api.upsertSnapshot(b); await get().refetch(); },
   editSnapshot: async (id, b) => { await api.updateSnapshot(id, b); await get().refetch(); },
   removeSnapshot: async (id) => { await api.deleteSnapshot(id); await get().refetch(); },
@@ -79,4 +81,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refetch();
     return summary;
   },
+  purgeData: async (mode) => { await api.purge(mode); await get().refetch(); },
 }));

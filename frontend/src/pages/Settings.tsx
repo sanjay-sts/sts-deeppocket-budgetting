@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { MultiSelect } from '../components/ui/MultiSelect';
 import { Tabs } from '../components/ui/Tabs';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
@@ -72,6 +73,11 @@ function HouseholdSection() {
           await removePerson(pendingDelete);
           setPendingDelete(null);
         }}
+        onForceConfirm={async () => {
+          if (!pendingDelete) return;
+          await removePerson(pendingDelete, true);
+          setPendingDelete(null);
+        }}
       />
     </Card>
   );
@@ -82,28 +88,35 @@ const INVESTMENT_KINDS = ['tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp', 'non_registere
 function InvestmentAccountsSection() {
   const fixtures = useAppStore((s) => s.fixtures);
   const addAccount = useAppStore((s) => s.addAccount);
+  const editAccount = useAppStore((s) => s.editAccount);
   const removeAccount = useAppStore((s) => s.removeAccount);
   const people = fixtures?.household ?? [];
   const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
   const kids = people.filter((p) => p.role === 'child');
+  const ownerOptions = people.map((p) => ({ id: p.id, label: p.name }));
+  const kidOptions = kids.map((k) => ({ id: k.id, label: k.name }));
   const institutionOptions = [...new Set(accounts.map((a) => a.institution))].sort();
+  const inputClass = 'w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand';
+  // Beneficiaries only apply to RESP accounts, so the picker is shown RESP-only.
+  const isResp = (t: string) => t.trim().toLowerCase() === 'resp';
   const [form, setForm] = useState({ personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
   const pendingAccount = accounts.find((a) => a.id === pendingDelete) ?? null;
 
-  function toggleOwner(id: string) {
-    setForm((f) => ({
-      ...f,
-      personIds: f.personIds.includes(id) ? f.personIds.filter((x) => x !== id) : [...f.personIds, id],
-    }));
-  }
-
-  function toggleBeneficiary(id: string) {
-    setForm((f) => ({
-      ...f,
-      beneficiaryIds: f.beneficiaryIds.includes(id) ? f.beneficiaryIds.filter((x) => x !== id) : [...f.beneficiaryIds, id],
-    }));
+  async function saveEdit(id: string) {
+    setError('');
+    try {
+      await editAccount(id, {
+        personIds: draft.personIds, institution: draft.institution,
+        accountType: draft.accountType, beneficiaryIds: draft.beneficiaryIds,
+      });
+      setEditingId(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   async function submit() {
@@ -122,83 +135,87 @@ function InvestmentAccountsSection() {
   return (
     <Card>
       <h2 className="text-lg font-semibold text-ink mb-3">Investment accounts</h2>
-      <table className="w-full text-sm mb-3 table-fixed">
+      <table className="w-full text-sm mb-2 table-fixed">
         <thead>
           <tr className="text-left text-xs text-ink-dim uppercase tracking-wider">
-            <th className="py-1 pr-3 w-[16%]">Owner</th>
-            <th className="py-1 pr-3 w-[18%]">Institution</th>
-            <th className="py-1 pr-3 w-[18%]">Account type</th>
-            <th className="py-1 pr-3 w-[14%]">Kind</th>
-            <th className="py-1 pr-3 w-[18%]">RESP beneficiary</th>
-            <th className="w-[16%]"></th>
+            <th className="py-1 pr-3 w-[20%]">Owner</th>
+            <th className="py-1 pr-3 w-[40%]">Account</th>
+            <th className="py-1 pr-3 w-[22%]">Beneficiary</th>
+            <th className="w-[18%]"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
           {accounts.map((a) => (
-            <tr key={a.id} className="border-t border-line">
-              <td className="py-1.5 pr-3 text-ink-muted">{a.ownerIds.map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
-              <td className="py-1.5 pr-3 text-ink">{a.institution}</td>
-              <td className="py-1.5 pr-3 text-ink">{a.accountType ?? '—'}</td>
-              <td className="py-1.5 pr-3 text-ink-muted">{a.kind}</td>
-              <td className="py-1.5 pr-3 text-ink-muted">{(a.beneficiaryIds ?? []).map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
-              <td className="text-right">
-                <button className="text-down" onClick={() => setPendingDelete(a.id)}>Remove</button>
-              </td>
-            </tr>
+            editingId === a.id ? (
+              <tr key={a.id} className="border-t border-line">
+                <td className="py-1.5 pr-3 align-top">
+                  <MultiSelect options={ownerOptions} selected={draft.personIds} onChange={(ids) => setDraft({ ...draft, personIds: ids })} placeholder="Owner" />
+                </td>
+                <td className="py-1.5 pr-3 align-top">
+                  <div className="flex flex-col gap-1">
+                    <input className={inputClass} list="institution-options" placeholder="Institution — e.g. WealthSimple, Questrade, TD" value={draft.institution} onChange={(e) => setDraft({ ...draft, institution: e.target.value })} />
+                    <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={draft.accountType} onChange={(e) => setDraft({ ...draft, accountType: e.target.value })} />
+                  </div>
+                </td>
+                <td className="py-1.5 pr-3 align-top">
+                  {isResp(draft.accountType)
+                    ? <MultiSelect options={kidOptions} selected={draft.beneficiaryIds} onChange={(ids) => setDraft({ ...draft, beneficiaryIds: ids })} placeholder="Beneficiary" />
+                    : <span className="text-ink-dim">—</span>}
+                </td>
+                <td className="text-right whitespace-nowrap align-top">
+                  <Button onClick={() => saveEdit(a.id)} disabled={draft.personIds.length === 0}>Save</Button>
+                  <button className="text-ink-muted hover:text-ink ml-2" onClick={() => { setEditingId(null); setError(''); }}>Cancel</button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={a.id} className="border-t border-line">
+                <td className="py-1.5 pr-3 text-ink-muted">{a.ownerIds.map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
+                <td className="py-1.5 pr-3 text-ink">{a.name}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">
+                  {a.kind === 'resp'
+                    ? ((a.beneficiaryIds ?? []).map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—')
+                    : <span className="text-ink-dim">—</span>}
+                </td>
+                <td className="text-right whitespace-nowrap">
+                  <button className="text-ink-muted hover:text-ink" onClick={() => { setDraft({ personIds: a.ownerIds, institution: a.institution, accountType: a.accountType ?? '', beneficiaryIds: a.beneficiaryIds ?? [] }); setEditingId(a.id); setError(''); }}>Edit</button>
+                  <button className="text-down ml-2" onClick={() => setPendingDelete(a.id)}>Remove</button>
+                </td>
+              </tr>
+            )
           ))}
           <tr className="border-t border-line">
-            <td className="pt-2 pr-3">
-              <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto">
-                {people.map((p) => (
-                  <label key={p.id} className="flex items-center gap-1.5 text-xs text-ink-muted">
-                    <input
-                      type="checkbox"
-                      className="accent-brand"
-                      checked={form.personIds.includes(p.id)}
-                      onChange={() => toggleOwner(p.id)}
-                    />
-                    {p.name}
-                  </label>
-                ))}
-              </div>
+            <td className="pt-2 pr-3 align-top">
+              <MultiSelect options={ownerOptions} selected={form.personIds} onChange={(ids) => setForm({ ...form, personIds: ids })} placeholder="Owner" />
             </td>
-            <td className="pt-2 pr-3">
-              <input
-                className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand"
-                placeholder="Institution"
-                list="institution-options"
-                value={form.institution}
-                onChange={(e) => setForm({ ...form, institution: e.target.value })}
-              />
+            <td className="pt-2 pr-3 align-top">
+              <div className="flex flex-col gap-1">
+                <input
+                  className={inputClass}
+                  placeholder="Institution — e.g. WealthSimple, Questrade, TD"
+                  list="institution-options"
+                  value={form.institution}
+                  onChange={(e) => setForm({ ...form, institution: e.target.value })}
+                />
+                <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
+              </div>
               <datalist id="institution-options">
                 {institutionOptions.map((inst) => <option key={inst} value={inst} />)}
               </datalist>
             </td>
-            <td className="pt-2 pr-3">
-              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="e.g. tfsa, dccp2" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
+            <td className="pt-2 pr-3 align-top">
+              {isResp(form.accountType)
+                ? <MultiSelect options={kidOptions} selected={form.beneficiaryIds} onChange={(ids) => setForm({ ...form, beneficiaryIds: ids })} placeholder="Beneficiary" />
+                : <span className="text-ink-dim text-xs">RESP accounts only</span>}
             </td>
-            <td className="pt-2 pr-3 text-xs text-ink-dim italic">auto</td>
-            <td className="pt-2 pr-3">
-              <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto">
-                {kids.map((k) => (
-                  <label key={k.id} className="flex items-center gap-1.5 text-xs text-ink-muted">
-                    <input
-                      type="checkbox"
-                      className="accent-brand"
-                      checked={form.beneficiaryIds.includes(k.id)}
-                      onChange={() => toggleBeneficiary(k.id)}
-                    />
-                    {k.name}
-                  </label>
-                ))}
-              </div>
-            </td>
-            <td className="pt-2 text-right align-bottom">
+            <td className="pt-2 text-right align-top">
               <Button onClick={submit} disabled={!form.personIds.length || !form.institution || !form.accountType}>Add account</Button>
             </td>
           </tr>
         </tbody>
       </table>
+      <p className="text-xs text-ink-dim mb-3">
+        Recognized account types: tfsa, rrsp, resp, fhsa, dcpp, non_registered, crypto.
+      </p>
       {error && <p className="text-down text-sm mt-2">{error}</p>}
       <ConfirmDeleteModal
         open={pendingDelete !== null}
@@ -210,7 +227,88 @@ function InvestmentAccountsSection() {
           await removeAccount(pendingDelete);
           setPendingDelete(null);
         }}
+        onForceConfirm={async () => {
+          if (!pendingDelete) return;
+          await removeAccount(pendingDelete, true);
+          setPendingDelete(null);
+        }}
       />
+    </Card>
+  );
+}
+
+// The three irreversible bulk actions in the danger zone. Each is gated behind a distinct
+// type-to-confirm phrase so the buttons can never be mis-fired for one another.
+type PurgeMode = import('../data/api').PurgeMode;
+const DANGER_ACTIONS: {
+  mode: PurgeMode;
+  button: string;
+  phrase: string;
+  title: string;
+  description: string;
+}[] = [
+  {
+    mode: 'investments',
+    button: 'Clear investment data',
+    phrase: 'CLEAR',
+    title: 'Clear all investment data?',
+    description:
+      'This permanently deletes every investment account, snapshot, and contribution. Your household members are kept. This cannot be undone.',
+  },
+  {
+    mode: 'all',
+    button: 'Clear everything',
+    phrase: 'ERASE',
+    title: 'Clear everything?',
+    description:
+      'This permanently deletes all household members, accounts, snapshots, and contributions — everything editable. This cannot be undone.',
+  },
+  {
+    mode: 'demo',
+    button: 'Reset to demo data',
+    phrase: 'RESET',
+    title: 'Reset to demo data?',
+    description:
+      'This wipes your current household and investment data, then restores the built-in demo dataset in its place.',
+  },
+];
+
+function DangerZone() {
+  const purgeData = useAppStore((s) => s.purgeData);
+  const [pending, setPending] = useState<PurgeMode | null>(null);
+  const active = DANGER_ACTIONS.find((a) => a.mode === pending) ?? null;
+
+  return (
+    <Card className="border-down">
+      <h2 className="text-lg font-semibold text-down mb-1">Danger zone</h2>
+      <p className="text-ink-muted text-sm mb-4">
+        Irreversible bulk actions. Each asks you to type a keyword to confirm.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {DANGER_ACTIONS.map((a) => (
+          <button
+            key={a.mode}
+            className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors border border-down text-down hover:bg-down hover:text-bg"
+            onClick={() => setPending(a.mode)}
+          >
+            {a.button}
+          </button>
+        ))}
+      </div>
+      {active && (
+        <ConfirmDeleteModal
+          open={pending !== null}
+          title={active.title}
+          description={active.description}
+          confirmLabel={active.button}
+          confirmPhrase={active.phrase}
+          onCancel={() => setPending(null)}
+          onConfirm={async () => {
+            await purgeData(active.mode);
+            setPending(null);
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -297,6 +395,8 @@ export function Settings() {
           <div>Generated: <span className="num text-ink">{fixtures.meta.generatedAt}</span></div>
         </div>
       </Card>
+
+      <DangerZone />
     </div>
   );
 }

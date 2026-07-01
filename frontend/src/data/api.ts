@@ -61,12 +61,20 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
 export const createPerson = (b: PersonInput) => send<Person>('POST', '/api/people', b);
 export const updatePerson = (id: string, b: Partial<PersonInput>) =>
   send<Person>('PUT', `/api/people/${id}`, b);
-export const deletePerson = (id: string) => send<void>('DELETE', `/api/people/${id}`);
+export const deletePerson = (id: string, cascade = false) =>
+  send<void>('DELETE', `/api/people/${id}${cascade ? '?cascade=true' : ''}`);
 
 export const createAccount = (b: AccountInput) => send<Account>('POST', '/api/accounts', b);
 export const updateAccount = (id: string, b: Partial<AccountInput>) =>
   send<Account>('PUT', `/api/accounts/${id}`, b);
-export const deleteAccount = (id: string) => send<void>('DELETE', `/api/accounts/${id}`);
+export const deleteAccount = (id: string, cascade = false) =>
+  send<void>('DELETE', `/api/accounts/${id}${cascade ? '?cascade=true' : ''}`);
+
+// Danger-zone bulk purge. `investments` wipes all account/contribution/snapshot data but
+// keeps people; `all` wipes those and people too; `demo` wipes then reseeds demo data.
+export type PurgeMode = 'investments' | 'all' | 'demo';
+export const purge = (mode: PurgeMode) =>
+  send<{ mode: PurgeMode; ok: boolean }>('POST', '/api/admin/purge', { mode });
 
 export interface SnapshotRow { id: string; accountId: string; date: string; amount: number }
 export interface ImportSummary {
