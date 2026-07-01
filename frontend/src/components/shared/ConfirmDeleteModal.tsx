@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { ApiError } from '../../data/api';
 
@@ -9,6 +9,12 @@ interface ConfirmDeleteModalProps {
   confirmLabel?: string;
   onConfirm: () => Promise<void>;
   onCancel: () => void;
+  // When onConfirm throws a structured blocked-delete 409 and this is provided, the blocked
+  // view also renders a destructive "Delete anyway" button that force-deletes (cascade).
+  onForceConfirm?: () => Promise<void>;
+  // When set, the normal view renders a type-to-confirm input; the confirm button stays
+  // disabled until the typed value exactly (case-sensitively) equals this phrase.
+  confirmPhrase?: string;
 }
 
 // Known structured-detail count fields the backend may send on a blocked (409) delete,
@@ -53,10 +59,25 @@ export function ConfirmDeleteModal({
   confirmLabel = 'Delete',
   onConfirm,
   onCancel,
+  onForceConfirm,
+  confirmPhrase,
 }: ConfirmDeleteModalProps) {
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState('');
+
+  // These modals (Household / Investment-account deletes) stay mounted and only toggle `open`,
+  // so clear transient state whenever the modal closes — otherwise a prior blocked view,
+  // inline error, or typed phrase leaks into the next thing the user opens.
+  useEffect(() => {
+    if (!open) {
+      setBlockedMessage(null);
+      setError('');
+      setBusy(false);
+      setTyped('');
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -64,6 +85,7 @@ export function ConfirmDeleteModal({
     setBlockedMessage(null);
     setError('');
     setBusy(false);
+    setTyped('');
   }
 
   function handleCancel() {
@@ -87,6 +109,23 @@ export function ConfirmDeleteModal({
     }
   }
 
+  async function handleForceConfirm() {
+    if (!onForceConfirm) return;
+    setError('');
+    setBusy(true);
+    try {
+      await onForceConfirm();
+      // On success the caller closes the modal; nothing else to do here.
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const phraseGated = confirmPhrase !== undefined;
+  const phraseSatisfied = !phraseGated || typed === confirmPhrase;
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">
       <div className="bg-bg-card border border-line rounded-xl p-5 w-full max-w-sm mx-4">
@@ -94,21 +133,50 @@ export function ConfirmDeleteModal({
           <>
             <h3 className="text-ink font-semibold mb-2">Can&rsquo;t delete this yet</h3>
             <p className="text-ink-muted text-sm mb-4">{blockedMessage}</p>
-            <div className="flex justify-end">
-              <Button variant="secondary" onClick={handleCancel}>OK</Button>
-            </div>
+            {error && <p className="text-down text-sm mb-4">{error}</p>}
+            {onForceConfirm ? (
+              <div className="flex justify-between gap-2">
+                <button
+                  className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-down text-bg hover:opacity-90 disabled:opacity-60"
+                  onClick={handleForceConfirm}
+                  disabled={busy}
+                >
+                  Delete anyway
+                </button>
+                <Button variant="secondary" onClick={handleCancel} disabled={busy}>OK</Button>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <Button variant="secondary" onClick={handleCancel}>OK</Button>
+              </div>
+            )}
           </>
         ) : (
           <>
             <h3 className="text-ink font-semibold mb-2">{title}</h3>
             <p className="text-ink-muted text-sm mb-4">{description}</p>
+            {phraseGated && (
+              <div className="mb-4">
+                <label className="text-ink-muted text-sm block mb-1.5">
+                  Type <span className="text-ink font-semibold">{confirmPhrase}</span> to confirm.
+                </label>
+                <input
+                  className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand"
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  placeholder={confirmPhrase}
+                  aria-label="Confirmation phrase"
+                  autoFocus
+                />
+              </div>
+            )}
             {error && <p className="text-down text-sm mb-4">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={handleCancel} disabled={busy}>Cancel</Button>
               <button
                 className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-down text-bg hover:opacity-90 disabled:opacity-60"
                 onClick={handleConfirm}
-                disabled={busy}
+                disabled={busy || !phraseSatisfied}
               >
                 {confirmLabel}
               </button>
