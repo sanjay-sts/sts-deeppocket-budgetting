@@ -22,8 +22,8 @@ import type { Person, Account } from '../types';
 
 interface PersonInput { name: string; role: 'adult' | 'child'; birthYear?: number }
 interface AccountInput {
-  personId: string; institution: string; accountType: string;
-  kind?: string; name?: string; isLiability?: boolean; beneficiaryId?: string;
+  personIds: string[]; institution: string; accountType: string;
+  kind?: string; name?: string; isLiability?: boolean; beneficiaryIds?: string[];
 }
 
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {

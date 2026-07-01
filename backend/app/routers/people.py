@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..constants import new_id
-from ..models import Person, Account, Contribution
+from ..models import Person, AccountOwner, AccountBeneficiary, Contribution
 from ..schemas import PersonCreate, PersonUpdate
 from ..services.fixtures import _person_out
 
@@ -46,8 +46,8 @@ def delete_person(person_id: str, session: Session = Depends(get_session)):
     p = session.get(Person, person_id)
     if not p:
         raise HTTPException(404, "Person not found")
-    owns = session.exec(select(Account).where(Account.person_id == person_id)).first()
-    benef = session.exec(select(Account).where(Account.beneficiary_person_id == person_id)).first()
+    owns = session.exec(select(AccountOwner).where(AccountOwner.person_id == person_id)).first()
+    benef = session.exec(select(AccountBeneficiary).where(AccountBeneficiary.person_id == person_id)).first()
     contrib = session.exec(select(Contribution).where(Contribution.person_id == person_id)).first()
     if owns or benef or contrib:
         raise HTTPException(
