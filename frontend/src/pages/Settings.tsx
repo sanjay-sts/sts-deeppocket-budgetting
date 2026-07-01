@@ -28,8 +28,8 @@ function HouseholdSection() {
   return (
     <Card>
       <h2 className="text-lg font-semibold text-ink mb-3">Household</h2>
-      <table className="w-full text-sm mb-3">
-        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Name</th><th className="py-1 pr-3">Role</th><th className="py-1 pr-3">Birth year</th><th></th></tr></thead>
+      <table className="w-full text-sm mb-3 table-fixed">
+        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3 w-2/5">Name</th><th className="py-1 pr-3 w-1/5">Role</th><th className="py-1 pr-3 w-1/5">Birth year</th><th className="w-1/5"></th></tr></thead>
         <tbody className="divide-y divide-line">
           {household.map((p) => (
             <tr key={p.id} className="border-t border-line">
@@ -42,17 +42,25 @@ function HouseholdSection() {
               </td>
             </tr>
           ))}
+          <tr className="border-t border-line">
+            <td className="pt-2 pr-3">
+              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            </td>
+            <td className="pt-2 pr-3">
+              <select className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={role} onChange={(e) => setRole(e.target.value as 'adult' | 'child')}>
+                <option value="adult">adult</option>
+                <option value="child">child</option>
+              </select>
+            </td>
+            <td className="pt-2 pr-3">
+              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
+            </td>
+            <td className="pt-2 text-right align-bottom">
+              <Button onClick={submit} disabled={!name}>Add member</Button>
+            </td>
+          </tr>
         </tbody>
       </table>
-      <div className="flex gap-2 items-end">
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={role} onChange={(e) => setRole(e.target.value as 'adult' | 'child')}>
-          <option value="adult">adult</option>
-          <option value="child">child</option>
-        </select>
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
-        <Button onClick={submit} disabled={!name}>Add member</Button>
-      </div>
       {error && <p className="text-down text-sm mt-2">{error}</p>}
     </Card>
   );
@@ -86,13 +94,25 @@ function InvestmentAccountsSection() {
   return (
     <Card>
       <h2 className="text-lg font-semibold text-ink mb-3">Investment accounts</h2>
-      <table className="w-full text-sm mb-3">
-        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Owner</th><th className="py-1 pr-3">Institution</th><th className="py-1 pr-3">Type</th><th className="py-1 pr-3">Kind</th><th></th></tr></thead>
+      <table className="w-full text-sm mb-3 table-fixed">
+        <thead>
+          <tr className="text-left text-xs text-ink-dim uppercase tracking-wider">
+            <th className="py-1 pr-3 w-[16%]">Owner</th>
+            <th className="py-1 pr-3 w-[18%]">Institution</th>
+            <th className="py-1 pr-3 w-[20%]">Type</th>
+            <th className="py-1 pr-3 w-[12%]">Kind</th>
+            <th className="py-1 pr-3 w-[18%]">RESP beneficiary</th>
+            <th className="w-[16%]"></th>
+          </tr>
+        </thead>
         <tbody className="divide-y divide-line">
           {accounts.map((a) => (
             <tr key={a.id} className="border-t border-line">
               <td className="py-1.5 pr-3 text-ink-muted">{people.find((p) => p.id === a.ownerIds[0])?.name ?? '—'}</td>
-              <td className="py-1.5 pr-3 text-ink">{a.institution}</td><td className="py-1.5 pr-3 text-ink">{a.name}</td><td className="py-1.5 pr-3 text-ink-muted">{a.kind}</td>
+              <td className="py-1.5 pr-3 text-ink">{a.institution}</td>
+              <td className="py-1.5 pr-3 text-ink">{a.name}</td>
+              <td className="py-1.5 pr-3 text-ink-muted">{a.kind}</td>
+              <td className="py-1.5 pr-3 text-ink-muted">{a.beneficiaryId ? people.find((p) => p.id === a.beneficiaryId)?.name ?? '—' : '—'}</td>
               <td className="text-right">
                 <button className="text-down" onClick={async () => {
                   setError('');
@@ -101,21 +121,32 @@ function InvestmentAccountsSection() {
               </td>
             </tr>
           ))}
+          <tr className="border-t border-line">
+            <td className="pt-2 pr-3">
+              <select className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.personId} onChange={(e) => setForm({ ...form, personId: e.target.value })}>
+                <option value="">Owner…</option>
+                {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </td>
+            <td className="pt-2 pr-3">
+              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
+            </td>
+            <td className="pt-2 pr-3">
+              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="e.g. tfsa, dccp2" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
+            </td>
+            <td className="pt-2 pr-3 text-xs text-ink-dim italic">auto</td>
+            <td className="pt-2 pr-3">
+              <select className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.beneficiaryId} onChange={(e) => setForm({ ...form, beneficiaryId: e.target.value })}>
+                <option value="">Optional…</option>
+                {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+              </select>
+            </td>
+            <td className="pt-2 text-right align-bottom">
+              <Button onClick={submit} disabled={!form.personId || !form.institution || !form.accountType}>Add account</Button>
+            </td>
+          </tr>
         </tbody>
       </table>
-      <div className="flex gap-2 items-end flex-wrap">
-        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.personId} onChange={(e) => setForm({ ...form, personId: e.target.value })}>
-          <option value="">Owner…</option>
-          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Account type (e.g. tfsa, dccp2)" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
-        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.beneficiaryId} onChange={(e) => setForm({ ...form, beneficiaryId: e.target.value })}>
-          <option value="">RESP beneficiary (optional)…</option>
-          {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-        </select>
-        <Button onClick={submit} disabled={!form.personId || !form.institution || !form.accountType}>Add account</Button>
-      </div>
       {error && <p className="text-down text-sm mt-2">{error}</p>}
     </Card>
   );
