@@ -179,3 +179,83 @@ def test_delete_person_blocked_when_only_contribution(client):
     assert body["ownedAccountCount"] == 0
     assert body["beneficiaryAccountCount"] == 0
     assert body["contributionCount"] == 1
+
+
+def test_delete_account_cleans_up_owner_and_beneficiary_rows(client):
+    # Regression: deleting an account must not leave orphaned owner/beneficiary join
+    # rows behind, or those people can never be deleted afterwards ("beneficiary of a
+    # ghost account"). See delete_account.
+    owner = client.post("/api/people", json={"name": "Owner", "role": "adult"}).json()["id"]
+    k1 = client.post("/api/people", json={"name": "Kid1", "role": "child"}).json()["id"]
+    k2 = client.post("/api/people", json={"name": "Kid2", "role": "child"}).json()["id"]
+    aid = client.post("/api/accounts", json={
+        "personIds": [owner], "institution": "WS", "accountType": "resp",
+        "beneficiaryIds": [k1, k2]}).json()["id"]
+
+    assert client.delete(f"/api/accounts/{aid}").status_code == 204
+
+    # With the join rows cleaned up, none of these people are blocked any longer.
+    assert client.delete(f"/api/people/{owner}").status_code == 204
+    assert client.delete(f"/api/people/{k1}").status_code == 204
+    assert client.delete(f"/api/people/{k2}").status_code == 204
+
+
+def test_delete_account_cascade_removes_dependents(client):
+    pid = client.post("/api/people", json={"name": "S", "role": "adult"}).json()["id"]
+    aid = client.post("/api/accounts", json={
+        "personIds": [pid], "institution": "Q", "accountType": "tfsa"}).json()["id"]
+    client.post("/api/snapshots", json={"accountId": aid, "date": "2025-01-31", "amount": 100})
+    client.post("/api/contributions", json={
+        "accountId": aid, "personId": pid, "date": "2025-01-15", "amount": 500, "kind": "tfsa"})
+
+    # Plain delete is blocked because dependents exist...
+    assert client.delete(f"/api/accounts/{aid}").status_code == 409
+    # ...but cascade removes the account and all its dependents in one action.
+    assert client.delete(f"/api/accounts/{aid}?cascade=true").status_code == 204
+
+    # The account is gone (second delete 404s, and it's absent from the listing).
+    assert client.delete(f"/api/accounts/{aid}").status_code == 404
+    assert all(a["id"] != aid for a in client.get("/api/accounts").json())
+    # ...and so are its snapshot + contribution.
+    data = client.get("/api/data").json()
+    assert all(s["accountId"] != aid for s in data["investments"])
+    assert all(c["accountId"] != aid for c in data["contributionEvents"])
+    # The owner is no longer blocked from deletion.
+    assert client.delete(f"/api/people/{pid}").status_code == 204
+
+
+def test_delete_person_cascade(client):
+    a = client.post("/api/people", json={"name": "A", "role": "adult"}).json()["id"]
+    b = client.post("/api/people", json={"name": "B", "role": "adult"}).json()["id"]
+
+    # A solely owns this account (with a snapshot).
+    sole = client.post("/api/accounts", json={
+        "personIds": [a], "institution": "Sole", "accountType": "tfsa"}).json()["id"]
+    client.post("/api/snapshots", json={"accountId": sole, "date": "2025-01-31", "amount": 100})
+
+    # A co-owns this RESP with B and is also listed as a beneficiary of it.
+    resp = client.post("/api/accounts", json={
+        "personIds": [a, b], "institution": "WS", "accountType": "resp",
+        "beneficiaryIds": [a]}).json()["id"]
+    # A made a contribution to the co-owned RESP.
+    client.post("/api/contributions", json={
+        "accountId": resp, "personId": a, "date": "2025-01-15", "amount": 250, "kind": "resp"})
+
+    # Plain delete is blocked...
+    assert client.delete(f"/api/people/{a}").status_code == 409
+    # ...cascade drops A everywhere in one action.
+    assert client.delete(f"/api/people/{a}?cascade=true").status_code == 204
+
+    accounts = {acct["id"]: acct for acct in client.get("/api/accounts").json()}
+    # The solely-owned account is fully removed.
+    assert sole not in accounts
+    # The co-owned RESP survives, but A is no longer an owner or beneficiary of it.
+    assert resp in accounts
+    assert accounts[resp]["ownerIds"] == [b]
+    assert a not in accounts[resp].get("beneficiaryIds", [])
+    # A's contribution is gone, and A itself is gone.
+    data = client.get("/api/data").json()
+    assert all(c["personId"] != a for c in data["contributionEvents"])
+    assert all(p["id"] != a for p in client.get("/api/people").json())
+    # A is fully gone (a second delete 404s).
+    assert client.delete(f"/api/people/{a}").status_code == 404
