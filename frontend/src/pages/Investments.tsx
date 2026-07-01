@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -17,7 +17,9 @@ import { Progress } from '../components/ui/Progress';
 import { cad, cadK, pct } from '../lib/format';
 import { contributionRoomUsed, cesgStatusPerKid, estimateMarginalRate } from '../lib/canadian';
 import { MoneyCell } from '../components/shared/MoneyCell';
+import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { monthKey } from '../lib/format';
+import { listSnapshots, type SnapshotRow } from '../data/api';
 import type { AccountKind, ContributionKind } from '../types';
 
 const KIND_COLORS: Record<AccountKind, string> = {
@@ -324,6 +326,7 @@ export function ContributionsEditor() {
   const events = (fixtures?.contributionEvents ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
   const [f, setF] = useState({ accountId: '', personId: '', kind: 'rrsp' as ContributionKind, date: '', amount: '', beneficiaryId: '' });
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   async function submit() {
     setError('');
@@ -371,11 +374,22 @@ export function ContributionsEditor() {
           {events.map((e) => (
             <tr key={e.id} className="border-t border-line">
               <td className="py-1.5 pr-3 text-ink">{e.date}</td><td className="py-1.5 pr-3 text-ink-muted">{e.kind}</td><td className="py-1.5 pr-3 text-ink num">{e.amount.toLocaleString()}</td>
-              <td className="text-right"><button className="text-down" onClick={() => removeContribution(e.id)}>Delete</button></td>
+              <td className="text-right"><button className="text-down" onClick={() => setPendingDelete(e.id)}>Delete</button></td>
             </tr>
           ))}
         </tbody>
       </table>
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title="Delete this contribution?"
+        description="This will permanently delete this contribution record."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          await removeContribution(pendingDelete);
+          setPendingDelete(null);
+        }}
+      />
     </Card>
   );
 }
@@ -391,21 +405,33 @@ export function SnapshotEditor() {
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [rows, setRows] = useState<SnapshotRow[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // snapshots in the payload are id-less; the editable grid needs ids, so it reads them
-  // from listSnapshots via a small effect-free derived call done in the store refetch.
-  const rows = useMemo(
-    () => (fixtures?.investments ?? [])
-      .filter((s) => s.accountId === accountId)
-      .sort((a, b) => a.date.localeCompare(b.date)),
-    [fixtures, accountId],
-  );
+  // Snapshot rows in the consolidated fixtures payload have no stable per-row id, so this
+  // editor sources its own editable/deletable list from the id-bearing endpoint. Re-runs
+  // whenever the account changes, or after a successful save/delete bumps refreshKey.
+  useEffect(() => {
+    if (!accountId) {
+      setRows([]);
+      return;
+    }
+    let cancelled = false;
+    listSnapshots(accountId).then((data) => {
+      if (!cancelled) setRows([...data].sort((a, b) => a.date.localeCompare(b.date)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, refreshKey]);
 
   async function submit() {
     setError('');
     try {
       await saveSnapshot({ accountId, date, amount: Number(amount) });
       setDate(''); setAmount('');
+      setRefreshKey((k) => k + 1);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -426,17 +452,30 @@ export function SnapshotEditor() {
       {error && <p className="text-down text-sm mb-2">{error}</p>}
       {accountId && (
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Date</th><th className="py-1 pr-3">Amount</th></tr></thead>
+          <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Date</th><th className="py-1 pr-3">Amount</th><th></th></tr></thead>
           <tbody className="divide-y divide-line">
             {rows.map((s) => (
-              <tr key={s.date} className="border-t border-line">
+              <tr key={s.id} className="border-t border-line">
                 <td className="py-1.5 pr-3 text-ink">{s.date}</td>
                 <td className="py-1.5 pr-3 text-ink num">{s.amount.toLocaleString()}</td>
+                <td className="text-right"><button className="text-down" onClick={() => setPendingDelete(s.id)}>Delete</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title="Delete this snapshot?"
+        description="This will permanently delete this account value snapshot."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          await removeSnapshot(pendingDelete);
+          setPendingDelete(null);
+          setRefreshKey((k) => k + 1);
+        }}
+      />
     </Card>
   );
 }

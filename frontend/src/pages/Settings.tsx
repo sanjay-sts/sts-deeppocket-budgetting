@@ -4,6 +4,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
 import { Badge } from '../components/ui/Badge';
+import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import type { BudgetMode } from '../types';
 
 function HouseholdSection() {
@@ -14,6 +15,8 @@ function HouseholdSection() {
   const [role, setRole] = useState<'adult' | 'child'>('adult');
   const [birthYear, setBirthYear] = useState('');
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const pendingPerson = household.find((p) => p.id === pendingDelete) ?? null;
 
   async function submit() {
     setError('');
@@ -35,10 +38,7 @@ function HouseholdSection() {
             <tr key={p.id} className="border-t border-line">
               <td className="py-1.5 pr-3 text-ink">{p.name}</td><td className="py-1.5 pr-3 text-ink-muted">{p.role}</td><td className="py-1.5 pr-3 text-ink-muted">{p.birthYear ?? '—'}</td>
               <td className="text-right">
-                <button className="text-down" onClick={async () => {
-                  setError('');
-                  try { await removePerson(p.id); } catch (e) { setError((e as Error).message); }
-                }}>Remove</button>
+                <button className="text-down" onClick={() => setPendingDelete(p.id)}>Remove</button>
               </td>
             </tr>
           ))}
@@ -62,6 +62,17 @@ function HouseholdSection() {
         </tbody>
       </table>
       {error && <p className="text-down text-sm mt-2">{error}</p>}
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title={`Remove ${pendingPerson?.name ?? 'this person'}?`}
+        description="This will permanently delete this household member."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          await removePerson(pendingDelete);
+          setPendingDelete(null);
+        }}
+      />
     </Card>
   );
 }
@@ -78,6 +89,8 @@ function InvestmentAccountsSection() {
   const institutionOptions = [...new Set(accounts.map((a) => a.institution))].sort();
   const [form, setForm] = useState({ personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const pendingAccount = accounts.find((a) => a.id === pendingDelete) ?? null;
 
   function toggleOwner(id: string) {
     setForm((f) => ({
@@ -129,10 +142,7 @@ function InvestmentAccountsSection() {
               <td className="py-1.5 pr-3 text-ink-muted">{a.kind}</td>
               <td className="py-1.5 pr-3 text-ink-muted">{(a.beneficiaryIds ?? []).map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
               <td className="text-right">
-                <button className="text-down" onClick={async () => {
-                  setError('');
-                  try { await removeAccount(a.id); } catch (e) { setError((e as Error).message); }
-                }}>Remove</button>
+                <button className="text-down" onClick={() => setPendingDelete(a.id)}>Remove</button>
               </td>
             </tr>
           ))}
@@ -190,6 +200,17 @@ function InvestmentAccountsSection() {
         </tbody>
       </table>
       {error && <p className="text-down text-sm mt-2">{error}</p>}
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title={`Remove ${pendingAccount?.institution ?? 'this account'}?`}
+        description="This will permanently delete this investment account."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          await removeAccount(pendingDelete);
+          setPendingDelete(null);
+        }}
+      />
     </Card>
   );
 }

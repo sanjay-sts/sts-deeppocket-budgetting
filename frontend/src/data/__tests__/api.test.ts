@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loadFixtures, createPerson } from '../api';
+import { loadFixtures, createPerson, deleteAccount, ApiError } from '../api';
 
 describe('api seam', () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -30,5 +30,28 @@ describe('api seam', () => {
       { ok: false, status: 409, statusText: 'Conflict', text: async () => 'dup' } as unknown as Response);
     vi.stubGlobal('fetch', fetchMock);
     await expect(createPerson({ name: 'A', role: 'adult' })).rejects.toThrow('409');
+  });
+
+  it('throws ApiError with structured detail on blocked deletes', async () => {
+    const detail = { message: 'blocked', snapshotCount: 2, contributionCount: 1 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      statusText: 'Conflict',
+      text: async () => JSON.stringify({ detail }),
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    let error: unknown;
+    try {
+      await deleteAccount('acc_1');
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as ApiError;
+    expect(apiError.status).toBe(409);
+    expect((apiError.body as { detail: typeof detail }).detail.snapshotCount).toBe(2);
   });
 });

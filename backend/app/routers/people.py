@@ -46,12 +46,16 @@ def delete_person(person_id: str, session: Session = Depends(get_session)):
     p = session.get(Person, person_id)
     if not p:
         raise HTTPException(404, "Person not found")
-    owns = session.exec(select(AccountOwner).where(AccountOwner.person_id == person_id)).first()
-    benef = session.exec(select(AccountBeneficiary).where(AccountBeneficiary.person_id == person_id)).first()
-    contrib = session.exec(select(Contribution).where(Contribution.person_id == person_id)).first()
-    if owns or benef or contrib:
-        raise HTTPException(
-            409, "Cannot delete a person who still owns an account, is a beneficiary, "
-                 "or has contributions. Remove those first.")
+    owned_count = len(session.exec(select(AccountOwner).where(AccountOwner.person_id == person_id)).all())
+    beneficiary_count = len(
+        session.exec(select(AccountBeneficiary).where(AccountBeneficiary.person_id == person_id)).all())
+    contribution_count = len(session.exec(select(Contribution).where(Contribution.person_id == person_id)).all())
+    if owned_count or beneficiary_count or contribution_count:
+        raise HTTPException(409, detail={
+            "message": "This person still has dependent data. Remove it first.",
+            "ownedAccountCount": owned_count,
+            "beneficiaryAccountCount": beneficiary_count,
+            "contributionCount": contribution_count,
+        })
     session.delete(p)
     session.commit()

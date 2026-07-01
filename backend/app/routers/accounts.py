@@ -127,11 +127,15 @@ def delete_account(account_id: str, session: Session = Depends(get_session)):
     a = session.get(Account, account_id)
     if not a:
         raise HTTPException(404, "Account not found")
-    has_snap = session.exec(
-        select(InvestmentSnapshot).where(InvestmentSnapshot.account_id == account_id)).first()
-    has_contrib = session.exec(
-        select(Contribution).where(Contribution.account_id == account_id)).first()
-    if has_snap or has_contrib:
-        raise HTTPException(409, "Cannot delete an account that still has snapshots or contributions.")
+    snapshot_count = len(session.exec(
+        select(InvestmentSnapshot).where(InvestmentSnapshot.account_id == account_id)).all())
+    contribution_count = len(session.exec(
+        select(Contribution).where(Contribution.account_id == account_id)).all())
+    if snapshot_count or contribution_count:
+        raise HTTPException(409, detail={
+            "message": "This account still has dependent data. Remove it first.",
+            "snapshotCount": snapshot_count,
+            "contributionCount": contribution_count,
+        })
     session.delete(a)
     session.commit()
