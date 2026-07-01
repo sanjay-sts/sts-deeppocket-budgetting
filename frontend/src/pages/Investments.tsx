@@ -319,7 +319,7 @@ export function ContributionsEditor() {
   const addContribution = useAppStore((s) => s.addContribution);
   const removeContribution = useAppStore((s) => s.removeContribution);
   const people = fixtures?.household ?? [];
-  const accounts = fixtures?.accounts ?? [];
+  const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
   const kids = people.filter((p) => p.role === 'child');
   const events = (fixtures?.contributionEvents ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
   const [f, setF] = useState({ accountId: '', personId: '', kind: 'rrsp' as ContributionKind, date: '', amount: '', beneficiaryId: '' });
