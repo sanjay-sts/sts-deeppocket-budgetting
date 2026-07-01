@@ -7,13 +7,12 @@ DeepPocket is two processes: a FastAPI backend (SQLite) and the Vite frontend.
 
 ### Backend (from `backend/`)
 
+Uses [uv](https://docs.astral.sh/uv/) for the virtualenv and dependencies.
+
 ```bash
-python -m venv .venv
-# Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python seed.py                 # seed demo data  (or: python seed.py --investments=empty)
-uvicorn app.main:app --port 8000
+uv sync                        # creates .venv + installs from pyproject.toml/uv.lock
+uv run seed.py                 # seed demo data  (or: uv run seed.py --investments=empty)
+uv run uvicorn app.main:app --port 8000
 ```
 
 ### Frontend (from `frontend/`)
@@ -26,8 +25,8 @@ npm run dev                    # http://localhost:5173 (proxies /api -> :8000)
 ### Tests
 
 ```bash
-# backend (from backend/, venv active)
-pytest -q
+# backend (from backend/)
+uv run pytest -q
 # frontend (from frontend/)
 npm test
 ```
