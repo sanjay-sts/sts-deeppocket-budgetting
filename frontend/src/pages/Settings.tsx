@@ -75,6 +75,7 @@ function InvestmentAccountsSection() {
   const people = fixtures?.household ?? [];
   const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
   const kids = people.filter((p) => p.role === 'child');
+  const institutionOptions = [...new Set(accounts.map((a) => a.institution))].sort();
   const [form, setForm] = useState({ personId: '', institution: '', accountType: '', beneficiaryId: '' });
   const [error, setError] = useState('');
 
@@ -129,7 +130,16 @@ function InvestmentAccountsSection() {
               </select>
             </td>
             <td className="pt-2 pr-3">
-              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
+              <input
+                className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand"
+                placeholder="Institution"
+                list="institution-options"
+                value={form.institution}
+                onChange={(e) => setForm({ ...form, institution: e.target.value })}
+              />
+              <datalist id="institution-options">
+                {institutionOptions.map((inst) => <option key={inst} value={inst} />)}
+              </datalist>
             </td>
             <td className="pt-2 pr-3">
               <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="e.g. tfsa, dccp2" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
