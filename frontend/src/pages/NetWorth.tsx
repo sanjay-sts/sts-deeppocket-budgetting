@@ -40,7 +40,7 @@ export function NetWorth() {
   for (const b of nw.byAccount) {
     const acc = accById.get(b.accountId);
     if (!acc) continue;
-    const owner = acc.beneficiaryId ?? acc.ownerIds[0] ?? 'joint';
+    const owner = acc.beneficiaryIds?.[0] ?? acc.ownerIds[0] ?? 'joint';
     perPerson.set(owner, (perPerson.get(owner) ?? 0) + b.value);
   }
   const perPersonData = [...perPerson.entries()]

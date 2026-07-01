@@ -15,13 +15,13 @@ class PersonUpdate(BaseModel):
 
 
 class AccountCreate(BaseModel):
-    personId: str
+    personIds: list[str]
     institution: str
     accountType: str
     kind: Optional[str] = None
     name: Optional[str] = None
     isLiability: bool = False
-    beneficiaryId: Optional[str] = None
+    beneficiaryIds: list[str] = []
 
 
 class AccountUpdate(BaseModel):
@@ -30,7 +30,8 @@ class AccountUpdate(BaseModel):
     kind: Optional[str] = None
     name: Optional[str] = None
     isLiability: Optional[bool] = None
-    beneficiaryId: Optional[str] = None
+    personIds: Optional[list[str]] = None
+    beneficiaryIds: Optional[list[str]] = None
 
 
 class SnapshotUpsert(BaseModel):

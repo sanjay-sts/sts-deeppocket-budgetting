@@ -76,17 +76,31 @@ function InvestmentAccountsSection() {
   const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
   const kids = people.filter((p) => p.role === 'child');
   const institutionOptions = [...new Set(accounts.map((a) => a.institution))].sort();
-  const [form, setForm] = useState({ personId: '', institution: '', accountType: '', beneficiaryId: '' });
+  const [form, setForm] = useState({ personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
   const [error, setError] = useState('');
+
+  function toggleOwner(id: string) {
+    setForm((f) => ({
+      ...f,
+      personIds: f.personIds.includes(id) ? f.personIds.filter((x) => x !== id) : [...f.personIds, id],
+    }));
+  }
+
+  function toggleBeneficiary(id: string) {
+    setForm((f) => ({
+      ...f,
+      beneficiaryIds: f.beneficiaryIds.includes(id) ? f.beneficiaryIds.filter((x) => x !== id) : [...f.beneficiaryIds, id],
+    }));
+  }
 
   async function submit() {
     setError('');
     try {
       await addAccount({
-        personId: form.personId, institution: form.institution, accountType: form.accountType,
-        beneficiaryId: form.beneficiaryId || undefined,
+        personIds: form.personIds, institution: form.institution, accountType: form.accountType,
+        beneficiaryIds: form.beneficiaryIds.length ? form.beneficiaryIds : undefined,
       });
-      setForm({ personId: '', institution: '', accountType: '', beneficiaryId: '' });
+      setForm({ personIds: [], institution: '', accountType: '', beneficiaryIds: [] });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -100,8 +114,8 @@ function InvestmentAccountsSection() {
           <tr className="text-left text-xs text-ink-dim uppercase tracking-wider">
             <th className="py-1 pr-3 w-[16%]">Owner</th>
             <th className="py-1 pr-3 w-[18%]">Institution</th>
-            <th className="py-1 pr-3 w-[20%]">Type</th>
-            <th className="py-1 pr-3 w-[12%]">Kind</th>
+            <th className="py-1 pr-3 w-[18%]">Account type</th>
+            <th className="py-1 pr-3 w-[14%]">Kind</th>
             <th className="py-1 pr-3 w-[18%]">RESP beneficiary</th>
             <th className="w-[16%]"></th>
           </tr>
@@ -109,11 +123,11 @@ function InvestmentAccountsSection() {
         <tbody className="divide-y divide-line">
           {accounts.map((a) => (
             <tr key={a.id} className="border-t border-line">
-              <td className="py-1.5 pr-3 text-ink-muted">{people.find((p) => p.id === a.ownerIds[0])?.name ?? '—'}</td>
+              <td className="py-1.5 pr-3 text-ink-muted">{a.ownerIds.map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
               <td className="py-1.5 pr-3 text-ink">{a.institution}</td>
-              <td className="py-1.5 pr-3 text-ink">{a.name}</td>
+              <td className="py-1.5 pr-3 text-ink">{a.accountType ?? '—'}</td>
               <td className="py-1.5 pr-3 text-ink-muted">{a.kind}</td>
-              <td className="py-1.5 pr-3 text-ink-muted">{a.beneficiaryId ? people.find((p) => p.id === a.beneficiaryId)?.name ?? '—' : '—'}</td>
+              <td className="py-1.5 pr-3 text-ink-muted">{(a.beneficiaryIds ?? []).map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
               <td className="text-right">
                 <button className="text-down" onClick={async () => {
                   setError('');
@@ -124,10 +138,19 @@ function InvestmentAccountsSection() {
           ))}
           <tr className="border-t border-line">
             <td className="pt-2 pr-3">
-              <select className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.personId} onChange={(e) => setForm({ ...form, personId: e.target.value })}>
-                <option value="">Owner…</option>
-                {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto">
+                {people.map((p) => (
+                  <label key={p.id} className="flex items-center gap-1.5 text-xs text-ink-muted">
+                    <input
+                      type="checkbox"
+                      className="accent-brand"
+                      checked={form.personIds.includes(p.id)}
+                      onChange={() => toggleOwner(p.id)}
+                    />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
             </td>
             <td className="pt-2 pr-3">
               <input
@@ -146,13 +169,22 @@ function InvestmentAccountsSection() {
             </td>
             <td className="pt-2 pr-3 text-xs text-ink-dim italic">auto</td>
             <td className="pt-2 pr-3">
-              <select className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.beneficiaryId} onChange={(e) => setForm({ ...form, beneficiaryId: e.target.value })}>
-                <option value="">Optional…</option>
-                {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-              </select>
+              <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto">
+                {kids.map((k) => (
+                  <label key={k.id} className="flex items-center gap-1.5 text-xs text-ink-muted">
+                    <input
+                      type="checkbox"
+                      className="accent-brand"
+                      checked={form.beneficiaryIds.includes(k.id)}
+                      onChange={() => toggleBeneficiary(k.id)}
+                    />
+                    {k.name}
+                  </label>
+                ))}
+              </div>
             </td>
             <td className="pt-2 text-right align-bottom">
-              <Button onClick={submit} disabled={!form.personId || !form.institution || !form.accountType}>Add account</Button>
+              <Button onClick={submit} disabled={!form.personIds.length || !form.institution || !form.accountType}>Add account</Button>
             </td>
           </tr>
         </tbody>

@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from app.config import FIXTURES_PATH
 from app.constants import INVESTMENT_KINDS, new_id
 from app.db import engine, init_db
-from app.models import Person, Account, InvestmentSnapshot, Contribution
+from app.models import Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
 
 
 def _upsert(session: Session, model, pk: str, values: dict):
@@ -39,7 +39,7 @@ def seed(session: Session, investments: str = "demo") -> None:
 
     if investments == "empty":
         # Drop any previously-seeded investment domain so it starts clean.
-        for model in (Contribution, InvestmentSnapshot, Account):
+        for model in (Contribution, InvestmentSnapshot, AccountOwner, AccountBeneficiary, Account):
             for row in session.exec(select(model)).all():
                 session.delete(row)
         session.commit()
@@ -48,23 +48,32 @@ def seed(session: Session, investments: str = "demo") -> None:
     for a in base["accounts"]:
         if a["kind"] not in INVESTMENT_KINDS:
             continue
-        owner = a["ownerIds"][0]
-        # account_type seeds from the known kind, but the natural key
-        # (person_id, institution, account_type) must stay unique. Two RESP
-        # accounts at the same institution for the same owner differ only by
-        # beneficiary, so disambiguate account_type with it. account_type is
-        # internal (never served) so this affects no payload.
-        beneficiary = a.get("beneficiaryId")
-        account_type = f"{a['kind']}_{beneficiary}" if beneficiary else a["kind"]
         _upsert(session, Account, a["id"], {
-            "person_id": owner,
             "institution": a["institution"],
-            "account_type": account_type,   # seed account_type from the known kind
+            "account_type": a["kind"],   # seed account_type from the known kind
             "kind": a["kind"],
             "name": a["name"],
             "is_liability": a.get("isLiability", False),
-            "beneficiary_person_id": a.get("beneficiaryId"),
         })
+
+        # Owners/beneficiaries: clear and re-insert per account so re-seeding never
+        # duplicates join-table rows.
+        for row in session.exec(
+            select(AccountOwner).where(AccountOwner.account_id == a["id"])
+        ).all():
+            session.delete(row)
+        for owner in a["ownerIds"]:
+            session.add(AccountOwner(account_id=a["id"], person_id=owner))
+
+        for row in session.exec(
+            select(AccountBeneficiary).where(AccountBeneficiary.account_id == a["id"])
+        ).all():
+            session.delete(row)
+        # Accept either the new plural shape or the legacy singular one, so a raw
+        # fixture produced by an older mock generator still seeds correctly.
+        beneficiaries = a.get("beneficiaryIds") or ([a["beneficiaryId"]] if a.get("beneficiaryId") else [])
+        for beneficiary in beneficiaries:
+            session.add(AccountBeneficiary(account_id=a["id"], person_id=beneficiary))
     session.commit()
 
     # Snapshots are keyed by (account_id, date); re-seeding overwrites, never duplicates.

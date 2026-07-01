@@ -4,7 +4,7 @@ import io
 from sqlmodel import Session, select
 
 from ..constants import normalize_date, normalize_kind, new_id
-from ..models import Person, Account, InvestmentSnapshot
+from ..models import Person, Account, AccountOwner, InvestmentSnapshot
 
 REQUIRED = {"date", "person", "institution", "account_type", "amount"}
 
@@ -18,11 +18,21 @@ def _find_person(session: Session, name: str):
 
 
 def _find_account(session: Session, person_id: str, institution: str, account_type: str):
-    return session.exec(select(Account).where(
-        Account.person_id == person_id,
+    """Match ONLY single-owner accounts (owner set == {person_id}); CSV import can never
+    express joint ownership, so it must not match or write into a multi-owner account."""
+    candidates = session.exec(select(Account).where(
         Account.institution == institution,
         Account.account_type == account_type,
-    )).first()
+    )).all()
+    for account in candidates:
+        owner_ids = {
+            row.person_id for row in session.exec(
+                select(AccountOwner).where(AccountOwner.account_id == account.id)
+            ).all()
+        }
+        if owner_ids == {person_id}:
+            return account
+    return None
 
 
 def import_investment_csv(text: str, session: Session) -> dict:
@@ -59,13 +69,15 @@ def import_investment_csv(text: str, session: Session) -> dict:
         account = _find_account(session, person.id, institution, account_type)
         if not account:
             account = Account(
-                id=new_id("acc"), person_id=person.id, institution=institution,
+                id=new_id("acc"), institution=institution,
                 account_type=account_type, kind=normalize_kind(account_type),
                 name=f"{institution} {account_type}",
             )
             session.add(account)
             session.commit()
             session.refresh(account)
+            session.add(AccountOwner(account_id=account.id, person_id=person.id))
+            session.commit()
 
         existing = session.exec(select(InvestmentSnapshot).where(
             InvestmentSnapshot.account_id == account.id,

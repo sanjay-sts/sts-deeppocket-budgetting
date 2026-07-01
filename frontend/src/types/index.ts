@@ -32,8 +32,9 @@ export interface Account {
   name: string;
   kind: AccountKind;
   institution: string;
+  accountType?: string;
   ownerIds: PersonId[];
-  beneficiaryId?: PersonId;
+  beneficiaryIds?: PersonId[];
   isLiability?: boolean;
 }
 

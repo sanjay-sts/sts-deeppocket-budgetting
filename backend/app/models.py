@@ -10,17 +10,27 @@ class Person(SQLModel, table=True):
 
 
 class Account(SQLModel, table=True):
-    __table_args__ = (
-        UniqueConstraint("person_id", "institution", "account_type", name="uq_account_natural_key"),
-    )
+    # Ownership and RESP beneficiaries are multi-valued (a joint account can have several
+    # owners; a family RESP can have several beneficiaries), so they live in the
+    # AccountOwner / AccountBeneficiary join tables, not as scalar FKs here. The natural
+    # key (institution, account_type, owner-id-set, beneficiary-id-set) is enforced in
+    # app code (routers/accounts.py, services/csv_import.py), not as a DB constraint.
     id: str = Field(primary_key=True)
-    person_id: str = Field(foreign_key="person.id", index=True)
     institution: str
     account_type: str          # free text, e.g. "dccp2"
     kind: str                  # a legal AccountKind value (see constants)
     name: str
     is_liability: bool = False
-    beneficiary_person_id: Optional[str] = Field(default=None, foreign_key="person.id")
+
+
+class AccountOwner(SQLModel, table=True):
+    account_id: str = Field(foreign_key="account.id", primary_key=True)
+    person_id: str = Field(foreign_key="person.id", primary_key=True)
+
+
+class AccountBeneficiary(SQLModel, table=True):
+    account_id: str = Field(foreign_key="account.id", primary_key=True)
+    person_id: str = Field(foreign_key="person.id", primary_key=True)
 
 
 class InvestmentSnapshot(SQLModel, table=True):

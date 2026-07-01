@@ -197,9 +197,9 @@ export function Investments() {
                   const delta = prev ? (val - prev) / prev : 0;
                   const trend = (trendsByAcc[acc.id] ?? []).slice(-6);
                   const ownerName =
-                    acc.beneficiaryId
-                      ? personById.get(acc.beneficiaryId)?.name + ' (RESP)'
-                      : personById.get(acc.ownerIds[0] ?? '')?.name ?? '—';
+                    acc.beneficiaryIds?.length
+                      ? acc.beneficiaryIds.map((id) => personById.get(id)?.name).filter(Boolean).join(' & ') + ' (RESP)'
+                      : acc.ownerIds.map((id) => personById.get(id)?.name).filter(Boolean).join(' & ') || '—';
                   return (
                     <tr key={acc.id} className="hover:bg-bg-hover">
                       <td className="py-2 pr-3">

@@ -1,7 +1,7 @@
 def _person_account(client):
     pid = client.post("/api/people", json={"name": "S", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
-        "personId": pid, "institution": "Q", "accountType": "tfsa"}).json()["id"]
+        "personIds": [pid], "institution": "Q", "accountType": "tfsa"}).json()["id"]
     return aid
 
 
