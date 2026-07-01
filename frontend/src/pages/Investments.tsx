@@ -341,37 +341,37 @@ export function ContributionsEditor() {
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold mb-3">Contributions (RRSP / TFSA / RESP / FHSA)</h2>
+      <h2 className="text-lg font-semibold text-ink mb-3">Contributions (RRSP / TFSA / RESP / FHSA)</h2>
       <div className="flex gap-2 items-end flex-wrap mb-3">
-        <select className="border rounded px-2 py-1" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
           <option value="">Contributor…</option>
           {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select className="border rounded px-2 py-1" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
           <option value="">Account…</option>
           {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select className="border rounded px-2 py-1" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as ContributionKind })}>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as ContributionKind })}>
           {CONTRIBUTION_KINDS_LIST.map((k) => <option key={k} value={k}>{k}</option>)}
         </select>
         {f.kind === 'resp' && (
-          <select className="border rounded px-2 py-1" value={f.beneficiaryId} onChange={(e) => setF({ ...f, beneficiaryId: e.target.value })}>
+          <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.beneficiaryId} onChange={(e) => setF({ ...f, beneficiaryId: e.target.value })}>
             <option value="">Beneficiary…</option>
             {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
         )}
-        <input className="border rounded px-2 py-1" placeholder="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
-        <input className="border rounded px-2 py-1 w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         <Button onClick={submit} disabled={!f.personId || !f.accountId || !f.date || !f.amount || (f.kind === 'resp' && !f.beneficiaryId)}>Add</Button>
       </div>
-      {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+      {error && <p className="text-down text-sm mb-2">{error}</p>}
       <table className="w-full text-sm">
-        <thead><tr className="text-left text-gray-500"><th>Date</th><th>Kind</th><th>Amount</th><th></th></tr></thead>
-        <tbody>
+        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Date</th><th className="py-1 pr-3">Kind</th><th className="py-1 pr-3">Amount</th><th></th></tr></thead>
+        <tbody className="divide-y divide-line">
           {events.map((e) => (
-            <tr key={e.id} className="border-t">
-              <td>{e.date}</td><td>{e.kind}</td><td>{e.amount.toLocaleString()}</td>
-              <td className="text-right"><button className="text-red-600" onClick={() => removeContribution(e.id)}>Delete</button></td>
+            <tr key={e.id} className="border-t border-line">
+              <td className="py-1.5 pr-3 text-ink">{e.date}</td><td className="py-1.5 pr-3 text-ink-muted">{e.kind}</td><td className="py-1.5 pr-3 text-ink num">{e.amount.toLocaleString()}</td>
+              <td className="text-right"><button className="text-down" onClick={() => removeContribution(e.id)}>Delete</button></td>
             </tr>
           ))}
         </tbody>
@@ -413,25 +413,25 @@ export function SnapshotEditor() {
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold mb-3">Add / update value</h2>
+      <h2 className="text-lg font-semibold text-ink mb-3">Add / update value</h2>
       <div className="flex gap-2 items-end flex-wrap mb-4">
-        <select className="border rounded px-2 py-1" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="">Account…</option>
           {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <input className="border rounded px-2 py-1" placeholder="Date (YYYY-MM-DD)" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input className="border rounded px-2 py-1 w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Date (YYYY-MM-DD)" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <Button onClick={submit} disabled={!accountId || !date || !amount}>Save</Button>
       </div>
-      {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+      {error && <p className="text-down text-sm mb-2">{error}</p>}
       {accountId && (
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-gray-500"><th>Date</th><th>Amount</th></tr></thead>
-          <tbody>
+          <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Date</th><th className="py-1 pr-3">Amount</th></tr></thead>
+          <tbody className="divide-y divide-line">
             {rows.map((s) => (
-              <tr key={s.date} className="border-t">
-                <td>{s.date}</td>
-                <td>{s.amount.toLocaleString()}</td>
+              <tr key={s.date} className="border-t border-line">
+                <td className="py-1.5 pr-3 text-ink">{s.date}</td>
+                <td className="py-1.5 pr-3 text-ink num">{s.amount.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

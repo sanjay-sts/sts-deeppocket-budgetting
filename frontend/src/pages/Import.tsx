@@ -25,21 +25,21 @@ export function Import() {
 
   return (
     <Card>
-      <h1 className="text-xl font-semibold mb-2">Import investments CSV</h1>
-      <p className="text-sm text-gray-500 mb-3">
+      <h1 className="text-xl font-semibold text-ink mb-2">Import investments CSV</h1>
+      <p className="text-sm text-ink-dim mb-3">
         Columns: <code>date, person, institution, account_type, amount</code>.
         Dates may be <code>YYYYMMDD</code> or <code>YYYY-MM-DD</code>. Missing people/accounts are created automatically.
       </p>
       <div className="flex gap-2 items-center mb-3">
-        <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <input type="file" accept=".csv,text/csv" className="text-sm text-ink-muted" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         <Button onClick={run} disabled={!file || busy}>{busy ? 'Importing…' : 'Import'}</Button>
       </div>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-down text-sm">{error}</p>}
       {summary && (
-        <div className="text-sm">
+        <div className="text-sm text-ink-muted">
           <p>Created {summary.created} · Updated {summary.updated} · Skipped {summary.skipped}</p>
           {summary.errors.length > 0 && (
-            <ul className="mt-2 text-red-600 list-disc pl-5">
+            <ul className="mt-2 text-down list-disc pl-5">
               {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
             </ul>
           )}
