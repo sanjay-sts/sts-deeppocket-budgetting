@@ -27,15 +27,15 @@ function HouseholdSection() {
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold mb-3">Household</h2>
+      <h2 className="text-lg font-semibold text-ink mb-3">Household</h2>
       <table className="w-full text-sm mb-3">
-        <thead><tr className="text-left text-gray-500"><th>Name</th><th>Role</th><th>Birth year</th><th></th></tr></thead>
-        <tbody>
+        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Name</th><th className="py-1 pr-3">Role</th><th className="py-1 pr-3">Birth year</th><th></th></tr></thead>
+        <tbody className="divide-y divide-line">
           {household.map((p) => (
-            <tr key={p.id} className="border-t">
-              <td>{p.name}</td><td>{p.role}</td><td>{p.birthYear ?? '—'}</td>
+            <tr key={p.id} className="border-t border-line">
+              <td className="py-1.5 pr-3 text-ink">{p.name}</td><td className="py-1.5 pr-3 text-ink-muted">{p.role}</td><td className="py-1.5 pr-3 text-ink-muted">{p.birthYear ?? '—'}</td>
               <td className="text-right">
-                <button className="text-red-600" onClick={async () => {
+                <button className="text-down" onClick={async () => {
                   setError('');
                   try { await removePerson(p.id); } catch (e) { setError((e as Error).message); }
                 }}>Remove</button>
@@ -45,15 +45,15 @@ function HouseholdSection() {
         </tbody>
       </table>
       <div className="flex gap-2 items-end">
-        <input className="border rounded px-2 py-1" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <select className="border rounded px-2 py-1" value={role} onChange={(e) => setRole(e.target.value as 'adult' | 'child')}>
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={role} onChange={(e) => setRole(e.target.value as 'adult' | 'child')}>
           <option value="adult">adult</option>
           <option value="child">child</option>
         </select>
-        <input className="border rounded px-2 py-1 w-28" placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
         <Button onClick={submit} disabled={!name}>Add member</Button>
       </div>
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+      {error && <p className="text-down text-sm mt-2">{error}</p>}
     </Card>
   );
 }
@@ -85,16 +85,16 @@ function InvestmentAccountsSection() {
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold mb-3">Investment accounts</h2>
+      <h2 className="text-lg font-semibold text-ink mb-3">Investment accounts</h2>
       <table className="w-full text-sm mb-3">
-        <thead><tr className="text-left text-gray-500"><th>Owner</th><th>Institution</th><th>Type</th><th>Kind</th><th></th></tr></thead>
-        <tbody>
+        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3">Owner</th><th className="py-1 pr-3">Institution</th><th className="py-1 pr-3">Type</th><th className="py-1 pr-3">Kind</th><th></th></tr></thead>
+        <tbody className="divide-y divide-line">
           {accounts.map((a) => (
-            <tr key={a.id} className="border-t">
-              <td>{people.find((p) => p.id === a.ownerIds[0])?.name ?? '—'}</td>
-              <td>{a.institution}</td><td>{a.name}</td><td>{a.kind}</td>
+            <tr key={a.id} className="border-t border-line">
+              <td className="py-1.5 pr-3 text-ink-muted">{people.find((p) => p.id === a.ownerIds[0])?.name ?? '—'}</td>
+              <td className="py-1.5 pr-3 text-ink">{a.institution}</td><td className="py-1.5 pr-3 text-ink">{a.name}</td><td className="py-1.5 pr-3 text-ink-muted">{a.kind}</td>
               <td className="text-right">
-                <button className="text-red-600" onClick={async () => {
+                <button className="text-down" onClick={async () => {
                   setError('');
                   try { await removeAccount(a.id); } catch (e) { setError((e as Error).message); }
                 }}>Remove</button>
@@ -104,19 +104,19 @@ function InvestmentAccountsSection() {
         </tbody>
       </table>
       <div className="flex gap-2 items-end flex-wrap">
-        <select className="border rounded px-2 py-1" value={form.personId} onChange={(e) => setForm({ ...form, personId: e.target.value })}>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.personId} onChange={(e) => setForm({ ...form, personId: e.target.value })}>
           <option value="">Owner…</option>
           {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <input className="border rounded px-2 py-1" placeholder="Institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
-        <input className="border rounded px-2 py-1" placeholder="Account type (e.g. tfsa, dccp2)" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
-        <select className="border rounded px-2 py-1" value={form.beneficiaryId} onChange={(e) => setForm({ ...form, beneficiaryId: e.target.value })}>
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Account type (e.g. tfsa, dccp2)" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={form.beneficiaryId} onChange={(e) => setForm({ ...form, beneficiaryId: e.target.value })}>
           <option value="">RESP beneficiary (optional)…</option>
           {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
         </select>
         <Button onClick={submit} disabled={!form.personId || !form.institution || !form.accountType}>Add account</Button>
       </div>
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+      {error && <p className="text-down text-sm mt-2">{error}</p>}
     </Card>
   );
 }
