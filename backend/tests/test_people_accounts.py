@@ -21,7 +21,10 @@ def test_delete_person_blocked_when_owns_account(client):
         "personIds": [pid], "institution": "Questrade", "accountType": "tfsa"})
     r = client.delete(f"/api/people/{pid}")
     assert r.status_code == 409
-    assert "account" in r.json()["detail"].lower()
+    body = r.json()["detail"]
+    assert body["ownedAccountCount"] == 1
+    assert body["beneficiaryAccountCount"] == 0
+    assert body["contributionCount"] == 0
 
 
 def test_delete_person_ok_when_no_deps(client):
@@ -61,6 +64,22 @@ def test_delete_account_blocked_with_snapshots(client):
     client.post("/api/snapshots", json={"accountId": aid, "date": "2025-01-31", "amount": 100})
     r = client.delete(f"/api/accounts/{aid}")
     assert r.status_code == 409
+    body = r.json()["detail"]
+    assert body["snapshotCount"] == 1
+    assert body["contributionCount"] == 0
+
+
+def test_delete_account_blocked_with_only_contribution(client):
+    pid = client.post("/api/people", json={"name": "ContribOnly", "role": "adult"}).json()["id"]
+    aid = client.post("/api/accounts", json={
+        "personIds": [pid], "institution": "Q", "accountType": "tfsa"}).json()["id"]
+    client.post("/api/contributions", json={
+        "accountId": aid, "personId": pid, "date": "2025-01-15", "amount": 500, "kind": "tfsa"})
+    r = client.delete(f"/api/accounts/{aid}")
+    assert r.status_code == 409
+    body = r.json()["detail"]
+    assert body["snapshotCount"] == 0
+    assert body["contributionCount"] == 1
 
 
 def test_create_joint_account_with_two_owners(client):
@@ -126,6 +145,10 @@ def test_delete_person_blocked_when_joint_owner(client):
         "personIds": [p1, p2], "institution": "TD", "accountType": "chequing"})
     r = client.delete(f"/api/people/{p2}")
     assert r.status_code == 409
+    body = r.json()["detail"]
+    assert body["ownedAccountCount"] == 1
+    assert body["beneficiaryAccountCount"] == 0
+    assert body["contributionCount"] == 0
 
 
 def test_delete_person_blocked_when_family_resp_co_beneficiary(client):
@@ -137,3 +160,22 @@ def test_delete_person_blocked_when_family_resp_co_beneficiary(client):
         "beneficiaryIds": [k1, k2]})
     r = client.delete(f"/api/people/{k2}")
     assert r.status_code == 409
+    body = r.json()["detail"]
+    assert body["ownedAccountCount"] == 0
+    assert body["beneficiaryAccountCount"] == 1
+    assert body["contributionCount"] == 0
+
+
+def test_delete_person_blocked_when_only_contribution(client):
+    pid = client.post("/api/people", json={"name": "Sanjay", "role": "adult"}).json()["id"]
+    contributor = client.post("/api/people", json={"name": "Contributor", "role": "adult"}).json()["id"]
+    aid = client.post("/api/accounts", json={
+        "personIds": [pid], "institution": "WS", "accountType": "tfsa"}).json()["id"]
+    client.post("/api/contributions", json={
+        "accountId": aid, "personId": contributor, "date": "2025-01-15", "amount": 250, "kind": "tfsa"})
+    r = client.delete(f"/api/people/{contributor}")
+    assert r.status_code == 409
+    body = r.json()["detail"]
+    assert body["ownedAccountCount"] == 0
+    assert body["beneficiaryAccountCount"] == 0
+    assert body["contributionCount"] == 1

@@ -6,10 +6,32 @@ import type { Fixtures } from '../types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+  constructor(status: number, statusText: string, body: unknown) {
+    const detail =
+      typeof body === 'object' && body !== null && 'detail' in (body as Record<string, unknown>)
+        ? (body as { detail: unknown }).detail
+        : body;
+    const message = typeof detail === 'object' && detail !== null ? JSON.stringify(detail) : String(detail);
+    super(`${status} ${statusText}: ${message}`);
+    this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    const text = await res.text();
+    let body: unknown = text;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+    throw new ApiError(res.status, res.statusText, body);
   }
   return res.json() as Promise<T>;
 }
