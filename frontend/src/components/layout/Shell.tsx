@@ -17,6 +17,11 @@ const titles: Record<string, string> = {
   '/settings': 'Settings',
 };
 
+// Screens that read selectedMonth — the global selector only appears on these
+// (issue #9). Transactions has its own richer month filter; the rest show
+// latest-state or whole-history views where a global month means nothing.
+const monthScopedRoutes = new Set(['/', '/budgets', '/insights', '/reports']);
+
 export function Shell() {
   const { loaded, init } = useAppStore();
   const location = useLocation();
@@ -37,7 +42,10 @@ export function Shell() {
     <div className="h-full flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar title={titles[location.pathname] ?? 'DeepPocket'} />
+        <Topbar
+          title={titles[location.pathname] ?? 'DeepPocket'}
+          showMonthSelector={monthScopedRoutes.has(location.pathname)}
+        />
         <main className="flex-1 overflow-y-auto scrollbar-thin p-6">
           <Outlet />
         </main>
