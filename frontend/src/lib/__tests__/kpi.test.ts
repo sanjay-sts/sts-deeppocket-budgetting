@@ -13,7 +13,7 @@ function fx(investments: InvestmentSnapshot[]): Fixtures {
   return {
     household: [],
     accounts: [{ id: 'inv1', name: 'TFSA', kind: 'tfsa', institution: 'Q', ownerIds: ['p1'] }],
-    categories: [], rules: [], transactions: [],
+    categories: [], transactions: [],
     investments,
     contributionEvents: [], cesgGrants: [],
     budget: { mode: 'envelope', lines: [] },
