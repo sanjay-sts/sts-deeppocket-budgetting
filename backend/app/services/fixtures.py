@@ -18,15 +18,25 @@ def _person_out(p: Person) -> dict:
     return out
 
 
-def _account_out(a: Account, owner_ids: list[str], beneficiary_ids: list[str]) -> dict:
+def _account_out(
+    a: Account, owner_ids: list[str], beneficiary_ids: list[str], owner_names: list[str]
+) -> dict:
+    # Display name is computed on every read: a custom name always wins, otherwise it's
+    # the owners (comma-joined, in stored order) + institution + account type. Empty
+    # parts are dropped so a nameless owner set / blank institution never leaves gaps.
+    display = a.custom_name or " ".join(
+        x for x in [", ".join(owner_names), a.institution, a.account_type] if x
+    ).strip()
     out = {
         "id": a.id,
-        "name": a.name,
+        "name": display,
         "kind": a.kind,
         "institution": a.institution,
         "accountType": a.account_type,
         "ownerIds": owner_ids,
     }
+    if a.custom_name:
+        out["customName"] = a.custom_name
     if beneficiary_ids:
         out["beneficiaryIds"] = beneficiary_ids
     if a.is_liability:
@@ -63,15 +73,19 @@ def build_payload(session: Session) -> dict:
     for row in session.exec(select(AccountBeneficiary)).all():
         beneficiaries_by_account.setdefault(row.account_id, []).append(row.person_id)
 
+    names_by_id = {p.id: p.name for p in people}
     bank_accounts = [a for a in base["accounts"] if a["kind"] in BANK_KINDS]
-    db_accounts = [
-        _account_out(
-            a,
-            sorted(owners_by_account.get(a.id, [])),
-            sorted(beneficiaries_by_account.get(a.id, [])),
+    db_accounts = []
+    for a in accounts:
+        owner_ids = sorted(owners_by_account.get(a.id, []))
+        db_accounts.append(
+            _account_out(
+                a,
+                owner_ids,
+                sorted(beneficiaries_by_account.get(a.id, [])),
+                [names_by_id.get(pid, pid) for pid in owner_ids],
+            )
         )
-        for a in accounts
-    ]
 
     grants = derive_cesg_grants(contributions, base["craLimits"])
 

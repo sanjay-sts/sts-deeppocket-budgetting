@@ -71,7 +71,6 @@ def import_investment_csv(text: str, session: Session) -> dict:
             account = Account(
                 id=new_id("acc"), institution=institution,
                 account_type=account_type, kind=normalize_kind(account_type),
-                name=f"{institution} {account_type}",
             )
             session.add(account)
             session.commit()

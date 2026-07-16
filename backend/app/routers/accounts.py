@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..constants import new_id, normalize_kind
-from ..models import Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
+from ..models import Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
 from ..schemas import AccountCreate, AccountUpdate
 from ..services.deletion import cascade_delete_account
 from ..services.fixtures import _account_out
@@ -22,7 +22,13 @@ def _account_beneficiary_ids(session: Session, account_id: str) -> list[str]:
 
 
 def _out(session: Session, a: Account) -> dict:
-    return _account_out(a, _account_owner_ids(session, a.id), _account_beneficiary_ids(session, a.id))
+    owner_ids = _account_owner_ids(session, a.id)
+    # Owner names looked up in the SAME (sorted) order as the ids, so the computed
+    # display name in _account_out lines up owners with their ids.
+    owner_names = [
+        (p.name if (p := session.get(Person, pid)) else pid) for pid in owner_ids
+    ]
+    return _account_out(a, owner_ids, _account_beneficiary_ids(session, a.id), owner_names)
 
 
 def _natural_key_exists(
@@ -59,10 +65,10 @@ def create_account(body: AccountCreate, session: Session = Depends(get_session))
         raise HTTPException(
             409, "An account with this institution, type, owner set, and beneficiary set already exists.")
     kind = body.kind or normalize_kind(body.accountType)
-    name = body.name or f"{body.institution} {body.accountType}"
     a = Account(
         id=new_id("acc"), institution=body.institution,
-        account_type=body.accountType, kind=kind, name=name,
+        account_type=body.accountType, kind=kind,
+        custom_name=body.name or None,
         is_liability=body.isLiability,
     )
     session.add(a)
@@ -89,7 +95,8 @@ def update_account(account_id: str, body: AccountUpdate, session: Session = Depe
     if body.kind is not None:
         a.kind = body.kind
     if body.name is not None:
-        a.name = body.name
+        # An empty string clears the override, reverting to the computed auto name.
+        a.custom_name = body.name or None
     if body.isLiability is not None:
         a.is_liability = body.isLiability
 
