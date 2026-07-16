@@ -184,6 +184,8 @@ ALIASES: dict[str, str] = {
     "TD MORTGAGE": "TD Mortgage",
 }
 
+# Generator-internal: classify() uses these to categorize the mock
+# transactions. They are not emitted in fixtures.json (issue #6).
 RULES: list[dict[str, Any]] = [
     {"id": "r1",  "matcher": {"kind": "contains", "value": "TD MORTGAGE"},      "categoryId": "housing",         "order": 1},
     {"id": "r2",  "matcher": {"kind": "contains", "value": "PROPERTY TAX"},     "categoryId": "housing",         "order": 2},
@@ -995,7 +997,6 @@ def generate(seed: int, num_months: int, today: date) -> dict[str, Any]:
         "household": PEOPLE,
         "accounts": ACCOUNTS,
         "categories": CATEGORIES,
-        "rules": RULES,
         "transactions": all_txs,
         "investments": snapshots,
         "contributionEvents": all_contribs,

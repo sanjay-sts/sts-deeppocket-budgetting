@@ -93,7 +93,6 @@ def build_payload(session: Session) -> dict:
         "household": [_person_out(p) for p in people],
         "accounts": bank_accounts + db_accounts,
         "categories": base["categories"],
-        "rules": base["rules"],
         "transactions": base["transactions"],
         "investments": [
             {"date": s.date, "accountId": s.account_id, "amount": s.amount}
