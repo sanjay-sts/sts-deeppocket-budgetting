@@ -1,0 +1,100 @@
+# CLAUDE.md
+
+Guidance for working in **DeepPocket** — a local-only Canadian family personal-finance app.
+
+## What this is
+
+A single-household budgeting and net-worth tracker for a Canadian family (two adults, two kids).
+It models Canadian registered accounts (TFSA / RRSP / RESP / FHSA), contribution room against
+CRA limits, and RESP → CESG grant tracking.
+
+**Current state:** Milestone 1 shipped — a polished but **read-only** React prototype fed by a
+Python mock-data generator. Milestone 2 (in progress) adds a FastAPI + SQLite backend and makes
+the investment domain editable. See `docs/superpowers/specs/2026-06-28-m2-backend-editable-investments-design.md`.
+
+## Layout
+
+```
+frontend/              Vite + React 18 + TypeScript (strict) + Tailwind — the app
+  src/data/api.ts      THE DATA SEAM — the only place data enters the app (see below)
+  src/data/fixtures.json   generated mock data the app reads at boot
+  src/store/useAppStore.ts Zustand store — single in-memory source of truth
+  src/lib/             PURE functions: kpi.ts, canadian.ts, format.ts, categorize.ts
+  src/pages/           10 route screens (Dashboard, Transactions, … Settings)
+  src/components/      layout/ + shared/ + ui/ presentational components
+  src/types/index.ts   all shared TypeScript types (Fixtures shape lives here)
+mock/generate.py       Python generator → fixtures.json + 3 sample CSVs
+mock/out/              generated artifacts (fixtures.json, *.csv)
+docs/superpowers/specs/  design specs (start here for M2)
+backend/               (M2, not yet built) FastAPI + SQLModel + SQLite
+```
+
+## Commands
+
+Run from `frontend/`:
+
+| Command | What |
+|---|---|
+| `npm install` | install deps (first time) |
+| `npm run dev` | dev server on **http://localhost:5173** |
+| `npm run build` | typecheck (`tsc --noEmit`) **and** production build |
+| `npm run typecheck` | types only — fast feedback |
+
+There is **no test runner yet** (tracked as key-gap issue #7 — pytest + Vitest baseline).
+Until then, `npm run typecheck` is the only automated check; the build also typechecks.
+
+Regenerate mock data (from repo root, needs Python 3.11+):
+
+```
+python mock/generate.py
+```
+
+This writes `mock/out/fixtures.json` **and** copies it into `frontend/src/data/fixtures.json`
+(via the default `--frontend-data frontend/src/data`). The frontend reads that copy.
+
+## Architecture — the one rule that matters
+
+**Data enters the app through exactly one seam: `frontend/src/data/api.ts`.**
+
+```
+mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zustand)
+                                                              → lib/kpi.ts + lib/canadian.ts (pure)
+                                                              → pages render
+```
+
+- `api.ts` is the *only* module that knows where data comes from. M1 imports a static JSON;
+  M2 swaps `loadFixtures()` to `fetch('/api/data')` and adds write methods — **nothing else
+  should change** in the screens. If a feature needs to touch the data source, it goes through
+  `api.ts`, never around it.
+- `useAppStore.ts` is the single source of truth. Screens read from it; they do not fetch.
+  `init()` loads fixtures once. State: `selectedMonth`, `budgetMode`, plus `reclassifyTransaction`
+  (an **in-memory only** edit — lost on reload until M2 persistence lands).
+- **`lib/kpi.ts` and `lib/canadian.ts` are PURE.** No fetch, no store access, no side effects —
+  they take fixtures/args and return derived numbers. Keep them that way so they stay trivially
+  testable and screens stay thin. All KPI/allocation/room/CESG math lives here, not in components.
+
+## Conventions
+
+- **TypeScript strict.** No `any` escape hatches; add types to `src/types/index.ts`.
+- **Path alias:** `@` → `frontend/src` (configured in `vite.config.ts` + `tsconfig.json`).
+- **Money/dates:** format only via `lib/format.ts`. Dates are ISO `YYYY-MM-DD` strings.
+- **Canadian logic** (contribution room, CESG) lives in `lib/canadian.ts`; the 2025 CRA limits
+  are in `CRA_LIMITS_2025` there. CESG is 20% of RESP contributions, capped $500/yr/child and
+  $7,200 lifetime — and in M2 it is **derived**, never hand-entered.
+- **Components** are presentational; business logic belongs in `lib/`. Reuse `components/ui/*`
+  (Button, Card, Badge, Progress, Tabs) before adding new primitives.
+
+## Known gaps (tracked on the GitHub project board)
+
+- `lib/categorize.ts` is **dead code** — never imported; the fixture rules are unused (issue #6).
+- No automated tests yet (issue #7).
+- `non_registered` is missing from `kindOrder`, so it counts in net-worth total but shows no
+  breakdown row (issue #8).
+- The global month selector only affects Dashboard/Budgets/Insights (issue #9).
+- `date-fns` is declared in `package.json` but currently unused.
+
+## Working here
+
+- Read the relevant spec in `docs/superpowers/specs/` before starting a milestone feature.
+- Don't bypass the `api.ts` seam or push math into components — both are load-bearing for M2.
+- Match the existing file's style (naming, comment density, Tailwind usage) when editing.
