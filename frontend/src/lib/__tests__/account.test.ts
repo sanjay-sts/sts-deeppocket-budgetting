@@ -11,10 +11,10 @@ describe('autoName', () => {
     expect(autoName(['p1'], 'WealthSimple', 'TFSA', PEOPLE)).toBe('Sanjay S WealthSimple TFSA');
   });
 
-  it('comma-joins owners sorted by id, regardless of selection order', () => {
-    // Matches the backend, which reads owners in sorted-id order — the preview
+  it('comma-joins owners sorted by name, regardless of selection order', () => {
+    // Matches the backend, which sorts owner names alphabetically — the preview
     // must show exactly what will be persisted.
-    const expected = 'Sanjay S, Anumol S WealthSimple TFSA'; // p1 < p2
+    const expected = 'Anumol S, Sanjay S WealthSimple TFSA';
     expect(autoName(['p1', 'p2'], 'WealthSimple', 'TFSA', PEOPLE)).toBe(expected);
     expect(autoName(['p2', 'p1'], 'WealthSimple', 'TFSA', PEOPLE)).toBe(expected);
   });
@@ -24,8 +24,8 @@ describe('autoName', () => {
     expect(autoName(['p1'], '', 'RRSP', PEOPLE)).toBe('Sanjay S RRSP');
   });
 
-  it('ignores owner ids that do not resolve to a person', () => {
-    expect(autoName(['nope'], 'TD', 'RESP', PEOPLE)).toBe('TD RESP');
+  it('echoes owner ids that do not resolve to a person, like the backend', () => {
+    expect(autoName(['nope'], 'TD', 'RESP', PEOPLE)).toBe('nope TD RESP');
     expect(autoName([], '', '', PEOPLE)).toBe('');
   });
 });

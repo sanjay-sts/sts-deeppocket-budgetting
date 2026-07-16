@@ -23,11 +23,11 @@ def _account_beneficiary_ids(session: Session, account_id: str) -> list[str]:
 
 def _out(session: Session, a: Account) -> dict:
     owner_ids = _account_owner_ids(session, a.id)
-    # Owner names looked up in the SAME (sorted) order as the ids, so the computed
-    # display name in _account_out lines up owners with their ids.
-    owner_names = [
+    # Owner names sorted alphabetically so joint-account display names read naturally
+    # and match the frontend's autoName preview (which sorts the same way).
+    owner_names = sorted(
         (p.name if (p := session.get(Person, pid)) else pid) for pid in owner_ids
-    ]
+    )
     return _account_out(a, owner_ids, _account_beneficiary_ids(session, a.id), owner_names)
 
 
@@ -68,7 +68,7 @@ def create_account(body: AccountCreate, session: Session = Depends(get_session))
     a = Account(
         id=new_id("acc"), institution=body.institution,
         account_type=body.accountType, kind=kind,
-        custom_name=body.name or None,
+        custom_name=(body.name or "").strip() or None,
         is_liability=body.isLiability,
     )
     session.add(a)
@@ -95,8 +95,9 @@ def update_account(account_id: str, body: AccountUpdate, session: Session = Depe
     if body.kind is not None:
         a.kind = body.kind
     if body.name is not None:
-        # An empty string clears the override, reverting to the computed auto name.
-        a.custom_name = body.name or None
+        # An empty (or whitespace-only) string clears the override, reverting to
+        # the computed auto name.
+        a.custom_name = body.name.strip() or None
     if body.isLiability is not None:
         a.is_liability = body.isLiability
 

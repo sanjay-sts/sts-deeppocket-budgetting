@@ -42,6 +42,16 @@ describe('MultiSelect', () => {
     expect(trigger().textContent).toBe('Anumol, Sanjay');
   });
 
+  it('sorts the joined labels alphabetically regardless of options order', () => {
+    // Keeps the trigger label consistent with the sorted computed account name.
+    const unsorted = [
+      { id: 'p2', label: 'Sanjay' },
+      { id: 'p1', label: 'Anumol' },
+    ];
+    render(<MultiSelect options={unsorted} selected={['p2', 'p1']} onChange={() => {}} />);
+    expect(trigger().textContent).toBe('Anumol, Sanjay');
+  });
+
   it('opening the popover and clicking an unchecked option fires onChange with the id ADDED', () => {
     const onChange = vi.fn();
     render(<MultiSelect options={options} selected={['p1']} onChange={onChange} />);

@@ -22,7 +22,7 @@ def _account_out(
     a: Account, owner_ids: list[str], beneficiary_ids: list[str], owner_names: list[str]
 ) -> dict:
     # Display name is computed on every read: a custom name always wins, otherwise it's
-    # the owners (comma-joined, in stored order) + institution + account type. Empty
+    # the owners (comma-joined, sorted alphabetically) + institution + account type. Empty
     # parts are dropped so a nameless owner set / blank institution never leaves gaps.
     display = a.custom_name or " ".join(
         x for x in [", ".join(owner_names), a.institution, a.account_type] if x
@@ -83,7 +83,7 @@ def build_payload(session: Session) -> dict:
                 a,
                 owner_ids,
                 sorted(beneficiaries_by_account.get(a.id, [])),
-                [names_by_id.get(pid, pid) for pid in owner_ids],
+                sorted(names_by_id.get(pid, pid) for pid in owner_ids),
             )
         )
 
