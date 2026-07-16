@@ -105,8 +105,10 @@ export function Reports() {
 }
 
 function SpendingReport({ fixtures, totals }: { fixtures: ReturnType<typeof useAppStore.getState>['fixtures']; totals: ReturnType<typeof monthTotals> }) {
+  // Honour the global month selector; fall back to the latest month (issue #9).
+  const selectedMonth = useAppStore((s) => s.selectedMonth);
   if (!fixtures) return null;
-  const ym = totals[totals.length - 1]?.ym ?? '';
+  const ym = selectedMonth || (totals[totals.length - 1]?.ym ?? '');
   const cats = spendByCategory(fixtures, ym);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

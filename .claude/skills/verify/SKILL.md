@@ -30,6 +30,10 @@ and `curl -s -o /dev/null -w "%{http_code}" http://localhost:5173` (200).
 - First page load shows "Loading fixtures…" briefly; take a fresh `browser_snapshot` if the
   first one catches it.
 - The favicon 404 console error is pre-existing noise.
+- **Stale dev servers squat on :5173** — Vite silently falls forward (5174, 5175, …) and an
+  old M1-era server on 5173 serves index.html for `/api/*` ("Unexpected token '<'" in console,
+  app stuck on "Loading fixtures…"). Always read the `npm run dev` output for the real port
+  before navigating.
 - API state is easiest to assert via `curl -s http://localhost:8000/api/data | python -c ...`
   alongside the UI check.
 

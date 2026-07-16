@@ -8,9 +8,10 @@ A single-household budgeting and net-worth tracker for a Canadian family (two ad
 It models Canadian registered accounts (TFSA / RRSP / RESP / FHSA), contribution room against
 CRA limits, and RESP → CESG grant tracking.
 
-**Current state:** Milestone 1 shipped — a polished but **read-only** React prototype fed by a
-Python mock-data generator. Milestone 2 (in progress) adds a FastAPI + SQLite backend and makes
-the investment domain editable. See `docs/superpowers/specs/2026-06-28-m2-backend-editable-investments-design.md`.
+**Current state:** Milestone 2 shipped — a FastAPI + SQLite backend makes the investment
+domain (people, accounts, contributions, snapshots) editable; banking/transaction data is
+still read-only mock data merged in from fixtures. See
+`docs/superpowers/specs/2026-06-28-m2-backend-editable-investments-design.md`.
 
 ## Layout
 
@@ -19,14 +20,14 @@ frontend/              Vite + React 18 + TypeScript (strict) + Tailwind — the 
   src/data/api.ts      THE DATA SEAM — the only place data enters the app (see below)
   src/data/fixtures.json   generated mock data the app reads at boot
   src/store/useAppStore.ts Zustand store — single in-memory source of truth
-  src/lib/             PURE functions: kpi.ts, canadian.ts, format.ts, categorize.ts
+  src/lib/             PURE functions: kpi.ts, canadian.ts, format.ts, account.ts
   src/pages/           10 route screens (Dashboard, Transactions, … Settings)
   src/components/      layout/ + shared/ + ui/ presentational components
   src/types/index.ts   all shared TypeScript types (Fixtures shape lives here)
 mock/generate.py       Python generator → fixtures.json + 3 sample CSVs
 mock/out/              generated artifacts (fixtures.json, *.csv)
 docs/superpowers/specs/  design specs (start here for M2)
-backend/               (M2, not yet built) FastAPI + SQLModel + SQLite
+backend/               FastAPI + SQLModel + SQLite (managed with uv; DB file deeppocket.db)
 ```
 
 ## Commands
@@ -39,9 +40,15 @@ Run from `frontend/`:
 | `npm run dev` | dev server on **http://localhost:5173** |
 | `npm run build` | typecheck (`tsc --noEmit`) **and** production build |
 | `npm run typecheck` | types only — fast feedback |
+| `npm test` | Vitest unit/component tests |
 
-There is **no test runner yet** (tracked as key-gap issue #7 — pytest + Vitest baseline).
-Until then, `npm run typecheck` is the only automated check; the build also typechecks.
+Run from `backend/` (needs [uv](https://docs.astral.sh/uv/)):
+
+| Command | What |
+|---|---|
+| `uv run pytest -q` | backend tests |
+| `uv run seed.py` | (re)create + seed `deeppocket.db` — required after any schema change |
+| `uv run uvicorn app.main:app --port 8000` | API server (frontend dev server proxies `/api` → :8000) |
 
 Regenerate mock data (from repo root, needs Python 3.11+):
 
@@ -86,12 +93,9 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
 
 ## Known gaps (tracked on the GitHub project board)
 
-- `lib/categorize.ts` is **dead code** — never imported; the fixture rules are unused (issue #6).
-- No automated tests yet (issue #7).
-- `non_registered` is missing from `kindOrder`, so it counts in net-worth total but shows no
-  breakdown row (issue #8).
-- The global month selector only affects Dashboard/Budgets/Insights (issue #9).
 - `date-fns` is declared in `package.json` but currently unused.
+- Banking/transaction data is still read-only fixtures; `reclassifyTransaction` is in-memory
+  only (candidate M3: editable transactions + real auto-categorization).
 
 ## Working here
 
