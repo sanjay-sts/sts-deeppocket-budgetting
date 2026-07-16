@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
-import { netWorth, netWorthTrend } from '../lib/kpi';
+import { netWorth, netWorthByKind, netWorthTrend } from '../lib/kpi';
 import { cad, cadK, deltaPct, monthLabelShort } from '../lib/format';
 import { MoneyCell } from '../components/shared/MoneyCell';
 
@@ -49,23 +49,7 @@ export function NetWorth() {
 
   const PERSON_COLORS = ['#34d399', '#60a5fa', '#f472b6', '#fbbf24'];
 
-  // Breakdown rows
-  const rows: { label: string; value: number; sub?: string }[] = [];
-  const byKind = new Map<string, number>();
-  for (const b of nw.byAccount) {
-    const acc = accById.get(b.accountId);
-    if (!acc) continue;
-    byKind.set(acc.kind, (byKind.get(acc.kind) ?? 0) + b.value);
-  }
-  const kindOrder = ['chequing', 'savings', 'tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp', 'crypto', 'credit_card'];
-  const kindLabels: Record<string, string> = {
-    chequing: 'Chequing', savings: 'Savings',
-    tfsa: 'TFSA', rrsp: 'RRSP', resp: 'RESP', fhsa: 'FHSA',
-    dcpp: 'DCPP pension', crypto: 'Crypto', credit_card: 'Credit card debt',
-  };
-  for (const k of kindOrder) {
-    if (byKind.has(k)) rows.push({ label: kindLabels[k] ?? k, value: byKind.get(k)! });
-  }
+  const rows = useMemo(() => netWorthByKind(fixtures), [fixtures]);
 
   return (
     <div className="space-y-6">
