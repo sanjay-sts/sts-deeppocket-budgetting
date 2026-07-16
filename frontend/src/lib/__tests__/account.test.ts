@@ -11,10 +11,12 @@ describe('autoName', () => {
     expect(autoName(['p1'], 'WealthSimple', 'TFSA', PEOPLE)).toBe('Sanjay S WealthSimple TFSA');
   });
 
-  it('comma-joins two owners in order', () => {
-    expect(autoName(['p1', 'p2'], 'WealthSimple', 'TFSA', PEOPLE)).toBe(
-      'Sanjay S, Anumol S WealthSimple TFSA',
-    );
+  it('comma-joins owners sorted by id, regardless of selection order', () => {
+    // Matches the backend, which reads owners in sorted-id order — the preview
+    // must show exactly what will be persisted.
+    const expected = 'Sanjay S, Anumol S WealthSimple TFSA'; // p1 < p2
+    expect(autoName(['p1', 'p2'], 'WealthSimple', 'TFSA', PEOPLE)).toBe(expected);
+    expect(autoName(['p2', 'p1'], 'WealthSimple', 'TFSA', PEOPLE)).toBe(expected);
   });
 
   it('drops missing institution and type without leaving stray spaces', () => {
