@@ -242,15 +242,13 @@ def test_account_name_computed_from_single_owner(client):
 
 
 def test_account_name_joins_multiple_owners_with_comma(client):
-    # (b) Joint account -> owner names (sorted-id order) comma-joined, then institution + type.
+    # (b) Joint account -> owner names comma-joined alphabetically, then institution + type.
     p1 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
     p2 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
-    names = {p1: "Avery", p2: "Jordan"}
     aid = client.post("/api/accounts", json={
         "personIds": [p1, p2], "institution": "Blueleaf", "accountType": "tfsa"}).json()["id"]
 
-    owners_joined = ", ".join(names[pid] for pid in sorted([p1, p2]))
-    expected = f"{owners_joined} Blueleaf tfsa"
+    expected = "Jordan, Avery Blueleaf tfsa"
 
     listed = next(a for a in client.get("/api/accounts").json() if a["id"] == aid)
     assert listed["name"] == expected
@@ -277,14 +275,11 @@ def test_account_name_recomputes_when_owners_change(client):
     # (d) Changing the owner set recomputes the auto name.
     p1 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
     p2 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
-    names = {p1: "Avery", p2: "Jordan"}
     aid = client.post("/api/accounts", json={
         "personIds": [p1], "institution": "WS", "accountType": "tfsa"}).json()["id"]
-    assert client.get("/api/accounts").json()  # sanity
 
     updated = client.put(f"/api/accounts/{aid}", json={"personIds": [p1, p2]}).json()
-    owners_joined = ", ".join(names[pid] for pid in sorted([p1, p2]))
-    assert updated["name"] == f"{owners_joined} WS tfsa"
+    assert updated["name"] == "Jordan, Avery WS tfsa"
     assert "customName" not in updated
 
 
@@ -310,6 +305,25 @@ def test_account_name_blank_clears_custom_override(client):
     assert client.get("/api/accounts").json()[0]["customName"] == "Custom"
 
     reverted = client.put(f"/api/accounts/{aid}", json={"name": ""}).json()
+    assert reverted["name"] == "Avery WS tfsa"
+    assert "customName" not in reverted
+
+
+def test_account_whitespace_name_is_not_a_custom_override(client):
+    # (g) Whitespace-only names are trimmed away: no override on create, and a
+    # whitespace update clears an existing override just like "".
+    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    created = client.post("/api/accounts", json={
+        "personIds": [pid], "institution": "WS", "accountType": "tfsa", "name": "   "}).json()
+    assert created["name"] == "Avery WS tfsa"
+    assert "customName" not in created
+
+    aid = created["id"]
+    named = client.put(f"/api/accounts/{aid}", json={"name": "  My Fund  "}).json()
+    assert named["name"] == "My Fund"          # stored trimmed
+    assert named["customName"] == "My Fund"
+
+    reverted = client.put(f"/api/accounts/{aid}", json={"name": "   "}).json()
     assert reverted["name"] == "Avery WS tfsa"
     assert "customName" not in reverted
 

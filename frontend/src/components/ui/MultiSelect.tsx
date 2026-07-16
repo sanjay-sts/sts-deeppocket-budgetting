@@ -27,7 +27,8 @@ export function MultiSelect({ options, selected, onChange, placeholder = 'Select
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   }
 
-  const label = options.filter((o) => selected.includes(o.id)).map((o) => o.label).join(', ');
+  // Sorted alphabetically so the trigger label matches the computed account name's order.
+  const label = options.filter((o) => selected.includes(o.id)).map((o) => o.label).sort().join(', ');
 
   return (
     <div className="relative" ref={containerRef}>
