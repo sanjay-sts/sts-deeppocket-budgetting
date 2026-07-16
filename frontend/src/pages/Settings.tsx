@@ -6,6 +6,7 @@ import { MultiSelect } from '../components/ui/MultiSelect';
 import { Tabs } from '../components/ui/Tabs';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
+import { autoName } from '../lib/account';
 import type { BudgetMode } from '../types';
 
 function HouseholdSection() {
@@ -99,18 +100,18 @@ function InvestmentAccountsSection() {
   const inputClass = 'w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand';
   // Beneficiaries only apply to RESP accounts, so the picker is shown RESP-only.
   const isResp = (t: string) => t.trim().toLowerCase() === 'resp';
-  const [form, setForm] = useState({ personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
+  const [form, setForm] = useState({ name: '', personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
+  const [draft, setDraft] = useState({ name: '', personIds: [] as string[], institution: '', accountType: '', beneficiaryIds: [] as string[] });
   const pendingAccount = accounts.find((a) => a.id === pendingDelete) ?? null;
 
   async function saveEdit(id: string) {
     setError('');
     try {
       await editAccount(id, {
-        personIds: draft.personIds, institution: draft.institution,
+        name: draft.name, personIds: draft.personIds, institution: draft.institution,
         accountType: draft.accountType, beneficiaryIds: draft.beneficiaryIds,
       });
       setEditingId(null);
@@ -123,10 +124,11 @@ function InvestmentAccountsSection() {
     setError('');
     try {
       await addAccount({
+        name: form.name || undefined,
         personIds: form.personIds, institution: form.institution, accountType: form.accountType,
         beneficiaryIds: form.beneficiaryIds.length ? form.beneficiaryIds : undefined,
       });
-      setForm({ personIds: [], institution: '', accountType: '', beneficiaryIds: [] });
+      setForm({ name: '', personIds: [], institution: '', accountType: '', beneficiaryIds: [] });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -138,10 +140,12 @@ function InvestmentAccountsSection() {
       <table className="w-full text-sm mb-2 table-fixed">
         <thead>
           <tr className="text-left text-xs text-ink-dim uppercase tracking-wider">
-            <th className="py-1 pr-3 w-[20%]">Owner</th>
-            <th className="py-1 pr-3 w-[40%]">Account</th>
-            <th className="py-1 pr-3 w-[22%]">Beneficiary</th>
-            <th className="w-[18%]"></th>
+            <th className="py-1 pr-3 w-[22%]">Name</th>
+            <th className="py-1 pr-3 w-[16%]">Owner</th>
+            <th className="py-1 pr-3 w-[18%]">Institution</th>
+            <th className="py-1 pr-3 w-[14%]">Account type</th>
+            <th className="py-1 pr-3 w-[14%]">Beneficiary</th>
+            <th className="w-[16%]"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -149,13 +153,16 @@ function InvestmentAccountsSection() {
             editingId === a.id ? (
               <tr key={a.id} className="border-t border-line">
                 <td className="py-1.5 pr-3 align-top">
+                  <input className={inputClass} placeholder={autoName(draft.personIds, draft.institution, draft.accountType, people) || 'Auto name'} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                </td>
+                <td className="py-1.5 pr-3 align-top">
                   <MultiSelect options={ownerOptions} selected={draft.personIds} onChange={(ids) => setDraft({ ...draft, personIds: ids })} placeholder="Owner" />
                 </td>
                 <td className="py-1.5 pr-3 align-top">
-                  <div className="flex flex-col gap-1">
-                    <input className={inputClass} list="institution-options" placeholder="Institution — e.g. WealthSimple, Questrade, TD" value={draft.institution} onChange={(e) => setDraft({ ...draft, institution: e.target.value })} />
-                    <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={draft.accountType} onChange={(e) => setDraft({ ...draft, accountType: e.target.value })} />
-                  </div>
+                  <input className={inputClass} list="institution-options" placeholder="Institution — e.g. WealthSimple, Questrade, TD" value={draft.institution} onChange={(e) => setDraft({ ...draft, institution: e.target.value })} />
+                </td>
+                <td className="py-1.5 pr-3 align-top">
+                  <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={draft.accountType} onChange={(e) => setDraft({ ...draft, accountType: e.target.value })} />
                 </td>
                 <td className="py-1.5 pr-3 align-top">
                   {isResp(draft.accountType)
@@ -169,15 +176,17 @@ function InvestmentAccountsSection() {
               </tr>
             ) : (
               <tr key={a.id} className="border-t border-line">
-                <td className="py-1.5 pr-3 text-ink-muted">{a.ownerIds.map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
                 <td className="py-1.5 pr-3 text-ink">{a.name}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{a.ownerIds.map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—'}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{a.institution}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{a.accountType ?? '—'}</td>
                 <td className="py-1.5 pr-3 text-ink-muted">
                   {a.kind === 'resp'
                     ? ((a.beneficiaryIds ?? []).map((id) => people.find((p) => p.id === id)?.name).filter(Boolean).join(', ') || '—')
                     : <span className="text-ink-dim">—</span>}
                 </td>
                 <td className="text-right whitespace-nowrap">
-                  <button className="text-ink-muted hover:text-ink" onClick={() => { setDraft({ personIds: a.ownerIds, institution: a.institution, accountType: a.accountType ?? '', beneficiaryIds: a.beneficiaryIds ?? [] }); setEditingId(a.id); setError(''); }}>Edit</button>
+                  <button className="text-ink-muted hover:text-ink" onClick={() => { setDraft({ name: a.customName ?? '', personIds: a.ownerIds, institution: a.institution, accountType: a.accountType ?? '', beneficiaryIds: a.beneficiaryIds ?? [] }); setEditingId(a.id); setError(''); }}>Edit</button>
                   <button className="text-down ml-2" onClick={() => setPendingDelete(a.id)}>Remove</button>
                 </td>
               </tr>
@@ -185,22 +194,30 @@ function InvestmentAccountsSection() {
           ))}
           <tr className="border-t border-line">
             <td className="pt-2 pr-3 align-top">
+              <input
+                className={inputClass}
+                placeholder={autoName(form.personIds, form.institution, form.accountType, people) || 'Name (optional)'}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </td>
+            <td className="pt-2 pr-3 align-top">
               <MultiSelect options={ownerOptions} selected={form.personIds} onChange={(ids) => setForm({ ...form, personIds: ids })} placeholder="Owner" />
             </td>
             <td className="pt-2 pr-3 align-top">
-              <div className="flex flex-col gap-1">
-                <input
-                  className={inputClass}
-                  placeholder="Institution — e.g. WealthSimple, Questrade, TD"
-                  list="institution-options"
-                  value={form.institution}
-                  onChange={(e) => setForm({ ...form, institution: e.target.value })}
-                />
-                <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
-              </div>
+              <input
+                className={inputClass}
+                placeholder="Institution — e.g. WealthSimple, Questrade, TD"
+                list="institution-options"
+                value={form.institution}
+                onChange={(e) => setForm({ ...form, institution: e.target.value })}
+              />
               <datalist id="institution-options">
                 {institutionOptions.map((inst) => <option key={inst} value={inst} />)}
               </datalist>
+            </td>
+            <td className="pt-2 pr-3 align-top">
+              <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })} />
             </td>
             <td className="pt-2 pr-3 align-top">
               {isResp(form.accountType)

@@ -52,7 +52,7 @@ def seed(session: Session, investments: str = "demo") -> None:
             "institution": a["institution"],
             "account_type": a["kind"],   # seed account_type from the known kind
             "kind": a["kind"],
-            "name": a["name"],
+            # No stored name: custom_name stays None so the display name is computed.
             "is_liability": a.get("isLiability", False),
         })
 

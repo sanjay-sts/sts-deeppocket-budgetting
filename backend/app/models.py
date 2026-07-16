@@ -19,7 +19,10 @@ class Account(SQLModel, table=True):
     institution: str
     account_type: str          # free text, e.g. "dccp2"
     kind: str                  # a legal AccountKind value (see constants)
-    name: str
+    # Optional custom-name override. When None, the display name is COMPUTED on read
+    # as "{owners} {institution} {account_type}" (see services/fixtures._account_out),
+    # so it stays in sync when a person is renamed / owners change / type changes.
+    custom_name: Optional[str] = None
     is_liability: bool = False
 
 

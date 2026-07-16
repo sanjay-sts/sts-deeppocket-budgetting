@@ -29,7 +29,8 @@ export type AccountKind =
 
 export interface Account {
   id: AccountId;
-  name: string;
+  name: string; // computed display name: custom override, else owners + institution + type
+  customName?: string; // present only when a custom name override is set
   kind: AccountKind;
   institution: string;
   accountType?: string;
