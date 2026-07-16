@@ -12,7 +12,10 @@ export function autoName(
   accountType: string,
   people: { id: string; name: string }[],
 ): string {
-  const ownerNames = ownerIds
+  // Sorted by id to match the backend's read order (_account_owner_ids), so the
+  // preview shows exactly the name that will be persisted.
+  const ownerNames = [...ownerIds]
+    .sort()
     .map((id) => people.find((p) => p.id === id)?.name)
     .filter(Boolean)
     .join(', ');
