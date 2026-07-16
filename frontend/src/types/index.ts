@@ -57,19 +57,6 @@ export interface Category {
   isEssential?: boolean;
 }
 
-export interface RuleMatcher {
-  kind: 'contains' | 'regex';
-  value: string;
-}
-
-export interface Rule {
-  id: string;
-  matcher: RuleMatcher;
-  categoryId: CategoryId;
-  order: number;
-  tag?: string;
-}
-
 export interface Transaction {
   id: string;
   date: IsoDate;
@@ -151,7 +138,6 @@ export interface Fixtures {
   household: Person[];
   accounts: Account[];
   categories: Category[];
-  rules: Rule[];
   transactions: Transaction[];
   investments: InvestmentSnapshot[];
   contributionEvents: ContributionEvent[];

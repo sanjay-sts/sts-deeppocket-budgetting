@@ -428,7 +428,6 @@ function selfTest(): void {
     household: [],
     accounts: [],
     categories: fakeCats,
-    rules: [],
     transactions: fakeTxs,
     investments: [],
     contributionEvents: [],

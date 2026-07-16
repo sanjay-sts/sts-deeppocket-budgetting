@@ -395,7 +395,7 @@ export function Settings() {
         </div>
       </Card>
 
-      <Card title="Categories" subtitle={`${fixtures.categories.length} categories · ${fixtures.rules.length} rules`}>
+      <Card title="Categories" subtitle={`${fixtures.categories.length} categories`}>
         <div className="flex flex-wrap gap-2">
           {fixtures.categories.map((c) => (
             <span key={c.id} className="text-xs px-2 py-1 rounded bg-bg-elev border border-line text-ink-muted">
