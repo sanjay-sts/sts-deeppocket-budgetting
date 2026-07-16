@@ -10,9 +10,12 @@ import json
 from sqlmodel import Session, select
 
 from app.config import FIXTURES_PATH
-from app.constants import INVESTMENT_KINDS, new_id
+from app.constants import BANK_KINDS, INVESTMENT_KINDS, new_id
 from app.db import engine, init_db
-from app.models import Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
+from app.models import (
+    Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
+    Category, Transaction, Rule, BudgetLine, BudgetConfig, AppMeta,
+)
 
 
 def _upsert(session: Session, model, pk: str, values: dict):
@@ -38,11 +41,20 @@ def seed(session: Session, investments: str = "demo") -> None:
     session.commit()
 
     if investments == "empty":
-        # Drop any previously-seeded investment domain so it starts clean.
-        for model in (Contribution, InvestmentSnapshot, AccountOwner, AccountBeneficiary, Account):
+        # Drop only the investment domain; banking data (accounts in BANK_KINDS and
+        # their transactions) is not part of the 'empty investments' story.
+        for model in (Contribution, InvestmentSnapshot):
             for row in session.exec(select(model)).all():
                 session.delete(row)
+        inv_ids = {a.id for a in session.exec(select(Account)).all() if a.kind in INVESTMENT_KINDS}
+        for model in (AccountOwner, AccountBeneficiary):
+            for row in session.exec(select(model)).all():
+                if row.account_id in inv_ids:
+                    session.delete(row)
+        for aid in inv_ids:
+            session.delete(session.get(Account, aid))
         session.commit()
+        _seed_banking(session, base)
         return
 
     for a in base["accounts"]:
@@ -102,6 +114,78 @@ def seed(session: Session, investments: str = "demo") -> None:
             date=c["date"], amount=c["amount"], kind=c["kind"],
             beneficiary_person_id=c.get("beneficiaryId"),
         ))
+    session.commit()
+
+    _seed_banking(session, base)
+
+
+def _seed_banking(session: Session, base: dict) -> None:
+    """Seed categories, bank accounts, transactions, budget, and app meta. Idempotent:
+    every row is upserted by its fixture id / natural pk."""
+    for c in base["categories"]:
+        _upsert(session, Category, c["id"], {
+            "name": c["name"], "group": c["group"],
+            "bucket503020": c.get("bucket503020"),
+            "is_essential": c.get("isEssential", False),
+        })
+    session.commit()
+
+    opening = base["meta"].get("openingBalances", {})
+    for a in base["accounts"]:
+        if a["kind"] not in BANK_KINDS:
+            continue
+        _upsert(session, Account, a["id"], {
+            "institution": a["institution"],
+            "account_type": a["kind"],
+            "kind": a["kind"],
+            # Preserve the fixture display name exactly (screens keep rendering
+            # "TD Chequing (Sanjay)", not the computed owners+institution+type form).
+            "custom_name": a["name"],
+            "is_liability": a.get("isLiability", False),
+            "opening_balance": opening.get(a["id"], 0.0),
+        })
+        for row in session.exec(
+            select(AccountOwner).where(AccountOwner.account_id == a["id"])
+        ).all():
+            session.delete(row)
+        for owner in a["ownerIds"]:
+            session.add(AccountOwner(account_id=a["id"], person_id=owner))
+    session.commit()
+
+    for t in base["transactions"]:
+        _upsert(session, Transaction, t["id"], {
+            "account_id": t["accountId"], "date": t["date"],
+            "raw_merchant": t["rawMerchant"], "merchant": t["merchant"],
+            "amount": t["amount"], "category_id": t["categoryId"],
+            "person_id": t.get("personId"),
+            "is_transfer": t.get("isTransfer", False),
+            "is_duplicate": t.get("isDuplicate", False),
+            "notes": t.get("notes"),
+            "tags": json.dumps(t["tags"]) if t.get("tags") else None,
+            "running_total": t.get("runningTotal"),
+        })
+    session.commit()
+
+    for line in base["budget"]["lines"]:
+        existing = session.get(BudgetLine, line["categoryId"])
+        if existing:
+            existing.monthly_cap = line["monthlyCap"]
+            existing.rollover = line["rollover"]
+            session.add(existing)
+        else:
+            session.add(BudgetLine(
+                category_id=line["categoryId"],
+                monthly_cap=line["monthlyCap"], rollover=line["rollover"],
+            ))
+    cfg = session.get(BudgetConfig, 1) or BudgetConfig(id=1, mode=base["budget"]["mode"])
+    cfg.mode = base["budget"]["mode"]
+    cfg.target_savings_rate = base["budget"].get("targetSavingsRate")
+    session.add(cfg)
+
+    for key in ("generatedAt", "seed", "monthsCovered"):
+        meta_row = session.get(AppMeta, key) or AppMeta(key=key, value="")
+        meta_row.value = str(base["meta"][key])
+        session.add(meta_row)
     session.commit()
 
 
