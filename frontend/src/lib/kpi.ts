@@ -5,6 +5,7 @@
 
 import type {
   Account,
+  AccountKind,
   Budget,
   Category,
   CategoryId,
@@ -166,6 +167,41 @@ export function netWorth(fixtures: Fixtures): NetWorthBreakdown {
     total: round2(cash + investments - liabilities),
     byAccount,
   };
+}
+
+// Net-worth breakdown by account kind — cash first, investment kinds in
+// between, liabilities last. Every kind present in the data gets a row (kinds
+// missing from KIND_ORDER are appended) so the rows always sum to the total.
+export interface KindBreakdownRow {
+  kind: AccountKind;
+  label: string;
+  value: number;
+}
+
+const KIND_ORDER: AccountKind[] = [
+  'chequing', 'savings', 'tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp',
+  'non_registered', 'crypto', 'credit_card',
+];
+const KIND_LABELS: Record<AccountKind, string> = {
+  chequing: 'Chequing', savings: 'Savings',
+  tfsa: 'TFSA', rrsp: 'RRSP', resp: 'RESP', fhsa: 'FHSA',
+  dcpp: 'DCPP pension', non_registered: 'Non-registered', crypto: 'Crypto',
+  credit_card: 'Credit card debt',
+};
+
+export function netWorthByKind(fixtures: Fixtures): KindBreakdownRow[] {
+  const accById = new Map(fixtures.accounts.map((a) => [a.id, a]));
+  const byKind = new Map<AccountKind, number>();
+  for (const b of netWorth(fixtures).byAccount) {
+    const acc = accById.get(b.accountId);
+    if (!acc) continue;
+    byKind.set(acc.kind, (byKind.get(acc.kind) ?? 0) + b.value);
+  }
+  const kinds = [
+    ...KIND_ORDER.filter((k) => byKind.has(k)),
+    ...[...byKind.keys()].filter((k) => !KIND_ORDER.includes(k)),
+  ];
+  return kinds.map((k) => ({ kind: k, label: KIND_LABELS[k] ?? k, value: round2(byKind.get(k)!) }));
 }
 
 // Net-worth trend — one snapshot per month end, using end-of-month cash deltas
