@@ -76,7 +76,7 @@ class Transaction(SQLModel, table=True):
     account_id: str = Field(foreign_key="account.id", index=True)
     date: str = Field(index=True)       # ISO 'YYYY-MM-DD'
     raw_merchant: str
-    merchant: str
+    merchant: str = Field(index=True)   # categorization history scans by merchant
     amount: float                       # expense < 0, inflow > 0
     category_id: str = Field(foreign_key="category.id", index=True)
     person_id: Optional[str] = Field(default=None, foreign_key="person.id")
@@ -85,6 +85,7 @@ class Transaction(SQLModel, table=True):
     notes: Optional[str] = None
     tags: Optional[str] = None          # JSON-encoded list[str]
     running_total: Optional[float] = None
+    source: str = Field(default="bank")  # 'bank' (seed/CSV, immutable facts) | 'manual' (user-entered, fully editable)
 
 
 class Rule(SQLModel, table=True):

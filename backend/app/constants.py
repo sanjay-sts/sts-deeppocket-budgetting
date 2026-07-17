@@ -2,7 +2,7 @@ import re
 import uuid
 
 # kinds served to the frontend (must stay within the AccountKind union)
-BANK_KINDS = {"chequing", "savings", "credit_card"}
+BANK_KINDS = {"chequing", "savings", "credit_card", "cash"}
 INVESTMENT_KINDS = {"tfsa", "rrsp", "resp", "fhsa", "dcpp", "non_registered", "crypto"}
 
 # free-text account_type -> a legal AccountKind. Unknown types fall back to non_registered.

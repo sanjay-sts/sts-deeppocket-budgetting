@@ -71,6 +71,7 @@ def _transaction_out(t: Transaction) -> dict:
         "rawMerchant": t.raw_merchant, "merchant": t.merchant,
         "amount": t.amount, "categoryId": t.category_id,
     }
+    out["source"] = t.source
     if t.person_id:
         out["personId"] = t.person_id
     if t.is_transfer:

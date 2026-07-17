@@ -17,7 +17,7 @@ def test_purge_investments_keeps_banking(client, engine):
         assert s.get(Account, "sanjay_chequing") is not None
         assert len(s.exec(select(Transaction)).all()) == 864
         kinds = {a.kind for a in s.exec(select(Account)).all()}
-        assert kinds <= {"chequing", "savings", "credit_card"}
+        assert kinds <= {"chequing", "savings", "credit_card", "cash"}
 
 
 def test_purge_all_wipes_banking_too(client, engine):
