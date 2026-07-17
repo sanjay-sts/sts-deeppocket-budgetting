@@ -8,10 +8,15 @@ A single-household budgeting and net-worth tracker for a Canadian family (two ad
 It models Canadian registered accounts (TFSA / RRSP / RESP / FHSA), contribution room against
 CRA limits, and RESP → CESG grant tracking.
 
-**Current state:** Milestone 2 shipped — a FastAPI + SQLite backend makes the investment
-domain (people, accounts, contributions, snapshots) editable; banking/transaction data is
-still read-only mock data merged in from fixtures. See
-`docs/superpowers/specs/2026-06-28-m2-backend-editable-investments-design.md`.
+**Current state:** Milestone 3 shipped — the entire `/api/data` payload is now DB-backed
+(the fixtures file is seed input only). Transactions are editable (category, transfer/
+duplicate flags, notes, tags via `PATCH`; bank facts like amount/date/merchant stay
+immutable). Bank and credit-card CSV import ships with header auto-detection and
+idempotent dedup (`POST /api/import/transactions-csv`, UI card on the Import page next to
+the investments card). Auto-categorization runs history → user-editable rules →
+unclassified (rules CRUD at `/api/rules`, managed in a Settings "Categorization rules"
+card, with a create-rule prompt after reclassify on the Transactions page). See
+`docs/superpowers/specs/2026-07-16-m3-editable-transactions-design.md`.
 
 ## Layout
 
@@ -73,6 +78,9 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
   M2 swaps `loadFixtures()` to `fetch('/api/data')` and adds write methods — **nothing else
   should change** in the screens. If a feature needs to touch the data source, it goes through
   `api.ts`, never around it.
+- `mock/generate.py → fixtures.json` is now **seed input only**: `uv run seed.py` reads it
+  once to (re)populate `deeppocket.db`. The running app never reads the fixtures file — it's
+  not a runtime dependency.
 - `useAppStore.ts` is the single source of truth. Screens read from it; they do not fetch.
   `init()` loads fixtures once. State: `selectedMonth`, `budgetMode`, plus `reclassifyTransaction`
   (an **in-memory only** edit — lost on reload until M2 persistence lands).
@@ -94,8 +102,7 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
 ## Known gaps (tracked on the GitHub project board)
 
 - `date-fns` is declared in `package.json` but currently unused.
-- Banking/transaction data is still read-only fixtures; `reclassifyTransaction` is in-memory
-  only (candidate M3: editable transactions + real auto-categorization).
+- Categories & budgets are in the DB but not yet editable (candidate M4).
 
 ## Working here
 
