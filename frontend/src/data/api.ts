@@ -109,3 +109,39 @@ export const updateContribution = (id: string, b: Partial<ContributionInput>) =>
   send<ContributionEvent>('PUT', `/api/contributions/${id}`, b);
 export const deleteContribution = (id: string) =>
   send<void>('DELETE', `/api/contributions/${id}`);
+
+import type { Transaction } from '../types';
+
+export interface TransactionPatchInput {
+  categoryId?: string;
+  isTransfer?: boolean;
+  isDuplicate?: boolean;
+  notes?: string;   // '' clears
+  tags?: string[];  // [] clears
+}
+
+export const updateTransaction = (id: string, b: TransactionPatchInput) =>
+  send<Transaction>('PATCH', `/api/transactions/${id}`, b);
+
+export interface RuleRow { id: string; keyword: string; categoryId: string; createdAt: string }
+
+export const listRules = () => send<RuleRow[]>('GET', '/api/rules');
+export const createRule = (b: { keyword: string; categoryId: string }) =>
+  send<RuleRow>('POST', '/api/rules', b);
+export const updateRule = (id: string, b: { keyword?: string; categoryId?: string }) =>
+  send<RuleRow>('PUT', `/api/rules/${id}`, b);
+export const deleteRule = (id: string) => send<void>('DELETE', `/api/rules/${id}`);
+
+export interface TxImportSummary {
+  created: number; duplicates: number; skipped: number;
+  errors: { row: number; reason: string }[];
+  categorized: { history: number; rules: number; unclassified: number };
+}
+
+export async function importTransactionsCsv(file: File): Promise<TxImportSummary> {
+  const fd = new FormData();
+  fd.append('file', file);
+  return json<TxImportSummary>(
+    await fetch(`${BASE}/api/import/transactions-csv`, { method: 'POST', body: fd }),
+  );
+}

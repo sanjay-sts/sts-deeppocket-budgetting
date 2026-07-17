@@ -1,14 +1,12 @@
 import json
 from sqlmodel import Session, select
 
-from ..config import FIXTURES_PATH
-from ..constants import BANK_KINDS
-from ..models import Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
+from ..constants import BANK_KINDS, CRA_LIMITS_2025
+from ..models import (
+    Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
+    Category, Transaction, BudgetLine, BudgetConfig, AppMeta,
+)
 from .cesg import derive_cesg_grants
-
-
-def _load_base() -> dict:
-    return json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
 
 
 def _person_out(p: Person) -> dict:
@@ -58,13 +56,46 @@ def _contribution_out(c: Contribution) -> dict:
     return out
 
 
-def build_payload(session: Session) -> dict:
-    base = _load_base()
+def _category_out(c: Category) -> dict:
+    out = {"id": c.id, "name": c.name, "group": c.group}
+    if c.bucket503020:
+        out["bucket503020"] = c.bucket503020
+    if c.is_essential:
+        out["isEssential"] = True
+    return out
 
+
+def _transaction_out(t: Transaction) -> dict:
+    out = {
+        "id": t.id, "date": t.date, "accountId": t.account_id,
+        "rawMerchant": t.raw_merchant, "merchant": t.merchant,
+        "amount": t.amount, "categoryId": t.category_id,
+    }
+    if t.person_id:
+        out["personId"] = t.person_id
+    if t.is_transfer:
+        out["isTransfer"] = True
+    if t.is_duplicate:
+        out["isDuplicate"] = True
+    if t.notes:
+        out["notes"] = t.notes
+    if t.tags:
+        out["tags"] = json.loads(t.tags)
+    if t.running_total is not None:
+        out["runningTotal"] = t.running_total
+    return out
+
+
+def build_payload(session: Session) -> dict:
     people = session.exec(select(Person)).all()
     accounts = session.exec(select(Account)).all()
     snapshots = session.exec(select(InvestmentSnapshot)).all()
     contributions = session.exec(select(Contribution)).all()
+    categories = session.exec(select(Category)).all()
+    transactions = session.exec(select(Transaction)).all()
+    budget_lines = session.exec(select(BudgetLine)).all()
+    budget_cfg = session.get(BudgetConfig, 1)
+    meta_rows = {m.key: m.value for m in session.exec(select(AppMeta)).all()}
 
     owners_by_account: dict[str, list[str]] = {}
     for row in session.exec(select(AccountOwner)).all():
@@ -74,11 +105,10 @@ def build_payload(session: Session) -> dict:
         beneficiaries_by_account.setdefault(row.account_id, []).append(row.person_id)
 
     names_by_id = {p.id: p.name for p in people}
-    bank_accounts = [a for a in base["accounts"] if a["kind"] in BANK_KINDS]
-    db_accounts = []
+    accounts_out = []
     for a in accounts:
         owner_ids = sorted(owners_by_account.get(a.id, []))
-        db_accounts.append(
+        accounts_out.append(
             _account_out(
                 a,
                 owner_ids,
@@ -87,20 +117,39 @@ def build_payload(session: Session) -> dict:
             )
         )
 
-    grants = derive_cesg_grants(contributions, base["craLimits"])
+    grants = derive_cesg_grants(contributions, CRA_LIMITS_2025)
+
+    budget = {
+        "mode": budget_cfg.mode if budget_cfg else "envelope",
+        "lines": [
+            {"categoryId": line.category_id, "monthlyCap": line.monthly_cap, "rollover": line.rollover}
+            for line in budget_lines
+        ],
+    }
+    if budget_cfg and budget_cfg.target_savings_rate is not None:
+        budget["targetSavingsRate"] = budget_cfg.target_savings_rate
 
     return {
         "household": [_person_out(p) for p in people],
-        "accounts": bank_accounts + db_accounts,
-        "categories": base["categories"],
-        "transactions": base["transactions"],
+        "accounts": accounts_out,
+        "categories": [_category_out(c) for c in categories],
+        "transactions": [
+            _transaction_out(t) for t in sorted(transactions, key=lambda t: (t.date, t.id))
+        ],
         "investments": [
             {"date": s.date, "accountId": s.account_id, "amount": s.amount}
             for s in snapshots
         ],
         "contributionEvents": [_contribution_out(c) for c in contributions],
         "cesgGrants": grants,
-        "budget": base["budget"],
-        "craLimits": base["craLimits"],
-        "meta": base["meta"],
+        "budget": budget,
+        "craLimits": CRA_LIMITS_2025,
+        "meta": {
+            "generatedAt": meta_rows.get("generatedAt", ""),
+            "seed": int(meta_rows.get("seed", "0")),
+            "monthsCovered": int(meta_rows.get("monthsCovered", "0")),
+            "openingBalances": {
+                a.id: a.opening_balance for a in accounts if a.kind in BANK_KINDS
+            },
+        },
     }

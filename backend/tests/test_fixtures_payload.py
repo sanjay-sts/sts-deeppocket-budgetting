@@ -3,6 +3,43 @@ from app.models import Person, Account, AccountOwner, AccountBeneficiary, Invest
 from app.services.fixtures import build_payload
 from app.config import FIXTURES_PATH
 
+from seed import seed
+
+
+EXPECTED_KEYS = {
+    "household", "accounts", "categories", "transactions", "investments",
+    "contributionEvents", "cesgGrants", "budget", "craLimits", "meta",
+}
+
+
+def test_payload_is_composed_entirely_from_db(session):
+    seed(session)
+    payload = build_payload(session)
+    assert set(payload.keys()) == EXPECTED_KEYS
+    assert len(payload["transactions"]) == 864
+    assert payload["craLimits"]["TFSA_ANNUAL"] == 7000
+    assert payload["meta"]["openingBalances"]["sanjay_chequing"] == 14500.0
+    assert payload["meta"]["seed"] == 42
+    assert payload["budget"]["mode"] == "envelope"
+    tx = next(t for t in payload["transactions"] if t["id"] == "t1")
+    assert tx == {
+        "id": "t1", "date": "2025-05-15", "accountId": "sanjay_chequing",
+        "rawMerchant": "PAYROLL DEP NUTRIEN", "merchant": "Payroll Dep Nutrien",
+        "amount": 4666.73, "categoryId": "salary", "personId": "sanjay",
+        "runningTotal": 16015.09,
+    }
+
+
+def test_payload_accounts_include_bank_and_investment(session):
+    seed(session)
+    payload = build_payload(session)
+    kinds = {a["kind"] for a in payload["accounts"]}
+    assert "chequing" in kinds and "credit_card" in kinds
+    chequing = next(a for a in payload["accounts"] if a["id"] == "sanjay_chequing")
+    assert chequing["name"] == "TD Chequing (Sanjay)"
+    visa = next(a for a in payload["accounts"] if a["id"] == "sanjay_td_visa")
+    assert visa["isLiability"] is True
+
 
 def test_payload_has_all_fixture_keys(session):
     payload = build_payload(session)
@@ -17,7 +54,8 @@ def test_household_comes_from_db(session):
     assert {"id": "p9", "name": "Tester", "role": "adult", "birthYear": 1990} in payload["household"]
 
 
-def test_investment_accounts_from_db_banks_from_file(session):
+def test_investment_and_bank_accounts_both_from_db(session):
+    seed(session)
     session.add(Person(id="p1", name="Sanjay", role="adult"))
     session.add(Account(id="x1", institution="Questrade",
                         account_type="tfsa", kind="tfsa"))
@@ -29,7 +67,8 @@ def test_investment_accounts_from_db_banks_from_file(session):
     assert any(a["id"] == "x1" and a["ownerIds"] == ["p1"] and a["accountType"] == "tfsa"
                and a["name"] == "Sanjay Questrade tfsa" and "customName" not in a
                for a in payload["accounts"])
-    # ...and bank kinds still come through from the read-only file
+    # ...and bank kinds now come from the DB too (seeded from the fixture file, never
+    # read at request time)
     assert "chequing" in kinds or "savings" in kinds or "credit_card" in kinds
 
 

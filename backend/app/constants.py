@@ -24,6 +24,21 @@ KIND_MAP = {
 
 CONTRIBUTION_KINDS = {"tfsa", "rrsp", "resp", "fhsa"}
 
+# CRA limits are law, not user data — served into /api/data's craLimits block.
+# Values match lib/canadian.ts CRA_LIMITS_2025 on the frontend.
+CRA_LIMITS_2025 = {
+    "TFSA_ANNUAL": 7000,
+    "RRSP_ANNUAL_PCT": 0.18,
+    "RRSP_ANNUAL_CAP": 32490,
+    "RESP_LIFETIME_PER_CHILD": 50000,
+    "RESP_ANNUAL_FOR_FULL_CESG": 2500,
+    "FHSA_ANNUAL": 8000,
+    "FHSA_LIFETIME": 40000,
+    "CESG_RATE": 0.2,
+    "CESG_ANNUAL_PER_CHILD": 500,
+    "CESG_LIFETIME_PER_CHILD": 7200,
+}
+
 
 def normalize_kind(account_type: str) -> str:
     return KIND_MAP.get(account_type.strip().lower(), "non_registered")
@@ -34,10 +49,12 @@ def new_id(prefix: str) -> str:
 
 
 def normalize_date(s: str) -> str:
-    """Accept 'YYYYMMDD' or 'YYYY-MM-DD'; return ISO 'YYYY-MM-DD'. Raise on anything else."""
+    """Accept 'YYYYMMDD', 'YYYY-MM-DD', or 'MM/DD/YYYY' (bank exports); return ISO."""
     s = s.strip()
     if re.fullmatch(r"\d{8}", s):
         return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
         return s
-    raise ValueError(f"Unrecognized date format: {s!r} (expected YYYYMMDD or YYYY-MM-DD)")
+    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", s):
+        return f"{s[6:10]}-{s[0:2]}-{s[3:5]}"
+    raise ValueError(f"Unrecognized date format: {s!r} (expected YYYYMMDD, YYYY-MM-DD, or MM/DD/YYYY)")

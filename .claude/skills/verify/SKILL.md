@@ -25,8 +25,8 @@ and `curl -s -o /dev/null -w "%{http_code}" http://localhost:5173` (200).
 
 - **Schema changes need a DB rebuild**: no migrations — `rm backend/deeppocket.db && uv run seed.py`.
   The backend test suite uses an isolated in-memory DB and is unaffected.
-- The `/api/data` payload merges the SQLite DB (investments, people) with a **read-only
-  fixtures file** (banking, transactions) — banking account names/shape won't reflect DB code.
+- Since M3 the `/api/data` payload is composed **entirely from SQLite** — `fixtures.json`
+  is seed input only (`uv run seed.py`), so a stale DB (not the fixtures file) explains odd data.
 - First page load shows "Loading fixtures…" briefly; take a fresh `browser_snapshot` if the
   first one catches it.
 - The favicon 404 console error is pre-existing noise.
