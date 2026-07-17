@@ -86,7 +86,9 @@ frontend/src/pages/Transactions.tsx
                             category dropdown persists; inline "always do this?" rule
                             prompt after reclassify; row expands for notes/tags/flags
 frontend/src/pages/Settings.tsx
-                            + "Categorization rules" card, + "Import transactions CSV" card
+                            + "Categorization rules" card
+frontend/src/pages/Import.tsx
+                            + "Import transactions CSV" card
 ```
 
 **Why this shape.** Same proof as M2: because `/api/data` keeps its shape, the cutover is

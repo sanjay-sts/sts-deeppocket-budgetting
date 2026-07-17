@@ -83,7 +83,7 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
   not a runtime dependency.
 - `useAppStore.ts` is the single source of truth. Screens read from it; they do not fetch.
   `init()` loads fixtures once. State: `selectedMonth`, `budgetMode`, plus `reclassifyTransaction`
-  (an **in-memory only** edit — lost on reload until M2 persistence lands).
+  (persists via optimistic update + `PATCH /api/transactions/{id}` + refetch, M3).
 - **`lib/kpi.ts` and `lib/canadian.ts` are PURE.** No fetch, no store access, no side effects —
   they take fixtures/args and return derived numbers. Keep them that way so they stay trivially
   testable and screens stay thin. All KPI/allocation/room/CESG math lives here, not in components.
