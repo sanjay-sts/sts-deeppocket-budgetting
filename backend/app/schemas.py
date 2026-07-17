@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class PersonCreate(BaseModel):
@@ -59,3 +59,15 @@ class ContributionUpdate(BaseModel):
     amount: Optional[float] = None
     kind: Optional[str] = None
     beneficiaryId: Optional[str] = None
+
+
+class TransactionPatch(BaseModel):
+    # Bank facts (date/amount/merchant/account) are immutable: extra="forbid" turns any
+    # attempt to write them into a 422 instead of a silent ignore.
+    model_config = ConfigDict(extra="forbid")
+
+    categoryId: Optional[str] = None
+    isTransfer: Optional[bool] = None
+    isDuplicate: Optional[bool] = None
+    notes: Optional[str] = None      # "" clears
+    tags: Optional[list[str]] = None  # [] clears
