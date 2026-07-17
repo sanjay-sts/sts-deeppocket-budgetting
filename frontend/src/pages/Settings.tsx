@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -330,6 +330,90 @@ function DangerZone() {
   );
 }
 
+export function RulesSection() {
+  const fixtures = useAppStore((s) => s.fixtures)!;
+  const rules = useAppStore((s) => s.rules);
+  const loadRules = useAppStore((s) => s.loadRules);
+  const addRule = useAppStore((s) => s.addRule);
+  const editRule = useAppStore((s) => s.editRule);
+  const removeRule = useAppStore((s) => s.removeRule);
+
+  const [keyword, setKeyword] = useState('');
+  const [categoryId, setCategoryId] = useState(fixtures.categories[0]?.id ?? '');
+  const [error, setError] = useState('');
+
+  // Only fetch on mount if the store doesn't already have rules — avoids clobbering
+  // already-loaded state with a redundant refetch on remount.
+  useEffect(() => {
+    if (rules.length === 0) void loadRules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadRules]);
+
+  const catById = new Map(fixtures.categories.map((c) => [c.id, c]));
+
+  async function submit() {
+    setError('');
+    try {
+      await addRule({ keyword, categoryId });
+      setKeyword('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="keyword, e.g. costco"
+          className="bg-bg-elev border border-line rounded-md px-2 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-48"
+        />
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="bg-bg-elev border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-brand"
+        >
+          {fixtures.categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <Button onClick={() => void submit()} disabled={!keyword.trim()}>Add rule</Button>
+      </div>
+      {error && <p className="text-down text-sm">{error}</p>}
+      {rules.length === 0 ? (
+        <p className="text-sm text-ink-dim">No rules yet — reclassify a transaction and choose “Create rule”, or add one above.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <tbody className="divide-y divide-line">
+            {rules.map((r) => (
+              <tr key={r.id}>
+                <td className="py-2 text-ink">{r.keyword}</td>
+                <td className="py-2">
+                  <select
+                    value={r.categoryId}
+                    onChange={(e) => void editRule(r.id, { categoryId: e.target.value })}
+                    className="bg-transparent border-0 text-xs focus:outline-none cursor-pointer text-ink-muted hover:text-ink"
+                  >
+                    {fixtures.categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="py-2 text-right text-xs text-ink-dim">{catById.get(r.categoryId)?.group}</td>
+                <td className="py-2 text-right">
+                  <Button variant="ghost" onClick={() => void removeRule(r.id)}>Delete</Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 const modeDescriptions: Record<BudgetMode, { title: string; text: string }> = {
   envelope: {
     title: 'Envelope (rollover)',
@@ -403,6 +487,10 @@ export function Settings() {
             </span>
           ))}
         </div>
+      </Card>
+
+      <Card title="Categorization rules" subtitle="keyword → category, applied to CSV imports (newest rule wins)">
+        <RulesSection />
       </Card>
 
       <Card title="About this mock">
