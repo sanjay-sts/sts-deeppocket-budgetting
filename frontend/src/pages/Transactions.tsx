@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { MoneyCell } from '../components/shared/MoneyCell';
@@ -9,6 +9,12 @@ import { Button } from '../components/ui/Button';
 export function Transactions() {
   const fixtures = useAppStore((s) => s.fixtures)!;
   const reclassify = useAppStore((s) => s.reclassifyTransaction);
+  const editTransaction = useAppStore((s) => s.editTransaction);
+  const addRule = useAppStore((s) => s.addRule);
+
+  // After a reclassify, offer to make it a rule ("Always categorize X as Y?").
+  const [rulePrompt, setRulePrompt] = useState<{ txId: string; merchant: string; categoryId: string } | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [accountFilter, setAccountFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -38,6 +44,13 @@ export function Transactions() {
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 500);
   }, [fixtures.transactions, accountFilter, categoryFilter, monthFilter, search]);
+
+  // Clear stale expanded/prompt state when filters change so a row that
+  // disappears (or reappears) doesn't carry over an unrelated editor/prompt.
+  useEffect(() => {
+    setRulePrompt(null);
+    setExpandedId(null);
+  }, [accountFilter, categoryFilter, monthFilter, search]);
 
   const totalInflow = rows.reduce((a, t) => (t.amount > 0 ? a + t.amount : a), 0);
   const totalOutflow = rows.reduce((a, t) => (t.amount < 0 ? a + -t.amount : a), 0);
@@ -95,6 +108,23 @@ export function Transactions() {
       </Card>
 
       <Card title={`${rows.length} transactions`} subtitle={rows.length === 500 ? 'showing first 500' : undefined}>
+        {rulePrompt && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-ink-dim">
+            <span>
+              Always categorize “{rulePrompt.merchant}” as {catById.get(rulePrompt.categoryId)?.name ?? rulePrompt.categoryId}?
+            </span>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void addRule({ keyword: rulePrompt.merchant, categoryId: rulePrompt.categoryId });
+                setRulePrompt(null);
+              }}
+            >
+              Create rule
+            </Button>
+            <Button variant="ghost" onClick={() => setRulePrompt(null)}>Dismiss</Button>
+          </div>
+        )}
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead>
@@ -111,16 +141,23 @@ export function Transactions() {
                 const cat = catById.get(t.categoryId)!;
                 const acc = accById.get(t.accountId);
                 return (
-                  <tr key={t.id} className="hover:bg-bg-hover">
+                  <Fragment key={t.id}>
+                  <tr className="hover:bg-bg-hover">
                     <td className="py-2 pr-4 text-ink-muted whitespace-nowrap">{formatDate(t.date)}</td>
-                    <td className="py-2 pr-4 text-ink">
+                    <td
+                      className="py-2 pr-4 text-ink cursor-pointer"
+                      onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                    >
                       <div>{t.merchant}</div>
                       <div className="text-xs text-ink-dim truncate max-w-[220px]">{t.rawMerchant}</div>
                     </td>
                     <td className="py-2 pr-4">
                       <select
                         value={t.categoryId}
-                        onChange={(e) => reclassify(t.id, e.target.value)}
+                        onChange={(e) => {
+                          void reclassify(t.id, e.target.value);
+                          setRulePrompt({ txId: t.id, merchant: t.merchant, categoryId: e.target.value });
+                        }}
                         className="bg-transparent border-0 text-xs focus:outline-none cursor-pointer text-ink-muted hover:text-ink"
                       >
                         {fixtures.categories.map((c) => (
@@ -136,12 +173,88 @@ export function Transactions() {
                       <MoneyCell amount={t.amount} signedDisplay whole={false} />
                     </td>
                   </tr>
+                  {expandedId === t.id && (
+                    <tr className="bg-bg-elev/50">
+                      <td colSpan={5} className="py-3 px-4">
+                        <TxEditor
+                          tx={t}
+                          onSave={async (patch) => {
+                            await editTransaction(t.id, patch);
+                            setExpandedId(null);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function TxEditor({
+  tx,
+  onSave,
+}: {
+  tx: import('../types').Transaction;
+  onSave: (patch: import('../data/api').TransactionPatchInput) => Promise<void>;
+}) {
+  const [notes, setNotes] = useState(tx.notes ?? '');
+  const [tags, setTags] = useState((tx.tags ?? []).join(', '));
+  const [isTransfer, setIsTransfer] = useState(tx.isTransfer ?? false);
+  const [isDuplicate, setIsDuplicate] = useState(tx.isDuplicate ?? false);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-sm">
+      <label className="flex items-center gap-2 text-ink-muted">
+        Notes
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className="bg-bg-elev border border-line rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-brand w-56"
+        />
+      </label>
+      <label className="flex items-center gap-2 text-ink-muted">
+        Tags
+        <input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="comma, separated"
+          className="bg-bg-elev border border-line rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-brand w-48"
+        />
+      </label>
+      <label className="flex items-center gap-1.5 text-ink-muted">
+        <input type="checkbox" checked={isTransfer} onChange={(e) => setIsTransfer(e.target.checked)} />
+        Transfer
+      </label>
+      <label className="flex items-center gap-1.5 text-ink-muted">
+        <input type="checkbox" checked={isDuplicate} onChange={(e) => setIsDuplicate(e.target.checked)} />
+        Duplicate
+      </label>
+      <Button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await onSave({
+              notes,
+              tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+              isTransfer,
+              isDuplicate,
+            });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? 'Saving…' : 'Save'}
+      </Button>
     </div>
   );
 }
