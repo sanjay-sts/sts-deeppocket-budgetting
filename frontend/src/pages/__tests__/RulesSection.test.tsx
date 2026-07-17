@@ -13,6 +13,7 @@ vi.mock('../../data/api', () => ({
 import { useAppStore } from '../../store/useAppStore';
 import { RulesSection } from '../Settings';
 import type { Fixtures } from '../../types';
+import * as api from '../../data/api';
 
 const fixtures = {
   categories: [
@@ -32,6 +33,8 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  vi.clearAllMocks();
+  vi.mocked(api.listRules).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -41,6 +44,9 @@ afterEach(() => {
 
 describe('RulesSection', () => {
   it('lists rules with keyword and category name', async () => {
+    vi.mocked(api.listRules).mockResolvedValue([
+      { id: 'r1', keyword: 'costco', categoryId: 'groceries', createdAt: '2026-01-01' },
+    ]);
     useAppStore.setState({
       fixtures, loaded: true,
       rules: [{ id: 'r1', keyword: 'costco', categoryId: 'groceries', createdAt: '2026-01-01' }],
