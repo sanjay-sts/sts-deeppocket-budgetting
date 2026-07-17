@@ -42,8 +42,9 @@ No other tables change; no new tables.
 
 `seed.py` creates one additional account when absent (idempotent):
 
-- `id='cash_wallet'`, `kind='cash'`, `institution='Cash'`, `account_type=None`,
-  `opening_balance=0.0`, `is_liability=False`, owners = both adults, no beneficiaries.
+- `id='cash_wallet'`, `kind='cash'`, `institution='Cash'`, `account_type='cash'`,
+  `custom_name='Cash'` (so the display name is just "Cash"), `opening_balance=0.0`,
+  `is_liability=False`, owners = both adults, no beneficiaries.
 - `'cash'` is a new `AccountKind` value; it is a banking-side kind (like `chequing`)
   for payload grouping and balance math (opening balance + transactions).
 - Purge `demo` restores it via reseed; purge `all` deletes it like any account.
@@ -97,15 +98,15 @@ No other tables change; no new tables.
 
 ### 3.6 Rules
 
-- `PATCH /api/rules/{id}` — extended to accept `keyword` alongside the existing
-  `categoryId`. New keyword is trimmed, must be non-empty, and a case-insensitive
-  duplicate of another rule's keyword → 409 (same rule's own keyword unchanged is
-  fine). `created_at` is untouched (precedence unchanged by edits).
+- **Already implemented** (discovered at planning): `PUT /api/rules/{id}` accepts
+  `keyword` alongside `categoryId` — trimmed, non-empty, case-insensitive duplicate of
+  another rule → 409, own keyword unchanged is fine, `created_at` untouched. M4's work
+  here is frontend-only (§4.6).
 
 ### 3.7 Payload
 
 `build_payload` adds `source` to each transaction dict. The Cash wallet flows through
-the existing account serialization (computed name: owners + "Cash"). Additive only —
+the existing account serialization (its `custom_name` renders it as "Cash"). Additive only —
 `lib/kpi.ts` / `lib/canadian.ts` untouched.
 
 ## 4. Frontend
