@@ -342,12 +342,7 @@ export function RulesSection() {
   const [categoryId, setCategoryId] = useState(fixtures.categories[0]?.id ?? '');
   const [error, setError] = useState('');
 
-  // Only fetch on mount if the store doesn't already have rules — avoids clobbering
-  // already-loaded state with a redundant refetch on remount.
-  useEffect(() => {
-    if (rules.length === 0) void loadRules();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadRules]);
+  useEffect(() => { void loadRules(); }, [loadRules]);
 
   const catById = new Map(fixtures.categories.map((c) => [c.id, c]));
 
