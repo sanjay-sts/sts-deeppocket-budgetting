@@ -200,11 +200,11 @@ management data with their own endpoint, not render data).
 1. **Transactions page** — the existing category dropdown now persists (optimistic local
    update, then `PATCH` + refetch — instant UX that survives reload). After a
    reclassify, an inline prompt: *"Always categorize 'COSTCO WHOLESALE W1283' as
-   Groceries?"* — one click creates a rule (keyword prefilled with the merchant, editable
-   later in Settings). A transaction row expands to edit notes, tags, and the
-   transfer/duplicate flags.
-2. **Settings — Categorization rules card**: table of keyword → category with inline
-   add / edit / delete. Shows rule count in the card subtitle.
+   Groceries?"* — one click creates a rule (keyword prefilled with the merchant; rules
+   can be re-categorized or deleted in Settings). A transaction row expands to edit notes,
+   tags, and the transfer/duplicate flags.
+2. **Settings — Categorization rules card**: table of keyword → category, with inline
+   add / per-row category re-select / delete.
 3. **Import page — Import transactions CSV card**: file picker next to the existing
    investments-import card; on completion shows the full summary including the
    categorized split and per-row errors. (Superseded from an earlier Settings-card plan —
@@ -238,7 +238,7 @@ management data with their own endpoint, not render data).
 4. **Rules**: model already in (step 1), CRUD endpoints, Settings card, inline
    rule-creation prompt on reclassify.
 5. **Transaction CSV import**: sniffer/normalizer/dedup/categorizer service, endpoint,
-   Settings import card.
+   Import-page import card.
 6. Tests throughout (each step lands with its tests); final live Playwright pass;
    CLAUDE.md known-gaps refresh.
 

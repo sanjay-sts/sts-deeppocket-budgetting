@@ -52,7 +52,7 @@ Run from `backend/` (needs [uv](https://docs.astral.sh/uv/)):
 | Command | What |
 |---|---|
 | `uv run pytest -q` | backend tests |
-| `uv run seed.py` | (re)create + seed `deeppocket.db` — required after any schema change |
+| `uv run seed.py` | seed `deeppocket.db` — after any schema change, delete `deeppocket.db` first (seed.py adds tables but never alters existing ones) |
 | `uv run uvicorn app.main:app --port 8000` | API server (frontend dev server proxies `/api` → :8000) |
 
 Regenerate mock data (from repo root, needs Python 3.11+):

@@ -45,3 +45,26 @@ def test_rules_match_substring_case_insensitive_newest_first(session):
 def test_fallback_unclassified(session):
     _setup(session)
     assert categorize(session, "NEW MERCHANT", "New Merchant") == ("unclassified", "unclassified")
+
+
+def test_unclassified_history_does_not_shadow_a_matching_rule(session):
+    _setup(session)
+    session.add(Transaction(
+        id="old", account_id="chq", date="2026-01-01",
+        raw_merchant="COSTCO WHOLESALE W1283", merchant="Costco Wholesale W1283",
+        amount=-50, category_id="unclassified",
+    ))
+    session.add(Rule(id="r1", keyword="costco", category_id="groceries", created_at="2026-01-02T00:00:00"))
+    session.commit()
+    assert categorize(session, "COSTCO WHOLESALE W1283", "Costco Wholesale W1283") == ("groceries", "rules")
+
+
+def test_unclassified_history_falls_back_to_unclassified_without_a_rule(session):
+    _setup(session)
+    session.add(Transaction(
+        id="old", account_id="chq", date="2026-01-01",
+        raw_merchant="COSTCO WHOLESALE W1283", merchant="Costco Wholesale W1283",
+        amount=-50, category_id="unclassified",
+    ))
+    session.commit()
+    assert categorize(session, "COSTCO WHOLESALE W1283", "Costco Wholesale W1283") == ("unclassified", "unclassified")

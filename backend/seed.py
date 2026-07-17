@@ -14,7 +14,7 @@ from app.constants import BANK_KINDS, INVESTMENT_KINDS, new_id
 from app.db import engine, init_db
 from app.models import (
     Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
-    Category, Transaction, Rule, BudgetLine, BudgetConfig, AppMeta,
+    Category, Transaction, BudgetLine, BudgetConfig, AppMeta,
 )
 
 
