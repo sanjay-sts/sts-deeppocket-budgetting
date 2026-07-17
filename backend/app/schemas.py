@@ -81,3 +81,21 @@ class RuleCreate(BaseModel):
 class RuleUpdate(BaseModel):
     keyword: Optional[str] = None
     categoryId: Optional[str] = None
+
+
+class CategoryCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    group: str
+    bucket503020: Optional[str] = None
+    isEssential: bool = False
+
+
+class CategoryPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = None
+    group: Optional[str] = None
+    bucket503020: Optional[str] = None  # "" clears
+    isEssential: Optional[bool] = None
