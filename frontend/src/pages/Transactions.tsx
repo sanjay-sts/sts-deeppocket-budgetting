@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { MoneyCell } from '../components/shared/MoneyCell';
@@ -44,6 +44,13 @@ export function Transactions() {
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 500);
   }, [fixtures.transactions, accountFilter, categoryFilter, monthFilter, search]);
+
+  // Clear stale expanded/prompt state when filters change so a row that
+  // disappears (or reappears) doesn't carry over an unrelated editor/prompt.
+  useEffect(() => {
+    setRulePrompt(null);
+    setExpandedId(null);
+  }, [accountFilter, categoryFilter, monthFilter, search]);
 
   const totalInflow = rows.reduce((a, t) => (t.amount > 0 ? a + t.amount : a), 0);
   const totalOutflow = rows.reduce((a, t) => (t.amount < 0 ? a + -t.amount : a), 0);
@@ -101,6 +108,23 @@ export function Transactions() {
       </Card>
 
       <Card title={`${rows.length} transactions`} subtitle={rows.length === 500 ? 'showing first 500' : undefined}>
+        {rulePrompt && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-ink-dim">
+            <span>
+              Always categorize “{rulePrompt.merchant}” as {catById.get(rulePrompt.categoryId)?.name ?? rulePrompt.categoryId}?
+            </span>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void addRule({ keyword: rulePrompt.merchant, categoryId: rulePrompt.categoryId });
+                setRulePrompt(null);
+              }}
+            >
+              Create rule
+            </Button>
+            <Button variant="ghost" onClick={() => setRulePrompt(null)}>Dismiss</Button>
+          </div>
+        )}
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead>
@@ -143,23 +167,6 @@ export function Transactions() {
                         ))}
                       </select>
                       <div className="mt-1"><CategoryBadge category={cat} /></div>
-                      {rulePrompt?.txId === t.id && (
-                        <div className="mt-1 flex items-center gap-2 text-xs text-ink-dim">
-                          <span>
-                            Always categorize “{rulePrompt.merchant}” as {catById.get(rulePrompt.categoryId)?.name ?? rulePrompt.categoryId}?
-                          </span>
-                          <Button
-                            variant="ghost"
-                            onClick={() => {
-                              void addRule({ keyword: rulePrompt.merchant, categoryId: rulePrompt.categoryId });
-                              setRulePrompt(null);
-                            }}
-                          >
-                            Create rule
-                          </Button>
-                          <Button variant="ghost" onClick={() => setRulePrompt(null)}>Dismiss</Button>
-                        </div>
-                      )}
                     </td>
                     <td className="py-2 pr-4 text-ink-muted">{acc?.name ?? t.accountId}</td>
                     <td className="py-2 pr-4 text-right">
