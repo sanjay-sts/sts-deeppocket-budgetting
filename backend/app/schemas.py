@@ -71,3 +71,13 @@ class TransactionPatch(BaseModel):
     isDuplicate: Optional[bool] = None
     notes: Optional[str] = None      # "" clears
     tags: Optional[list[str]] = None  # [] clears
+
+
+class RuleCreate(BaseModel):
+    keyword: str
+    categoryId: str
+
+
+class RuleUpdate(BaseModel):
+    keyword: Optional[str] = None
+    categoryId: Optional[str] = None
