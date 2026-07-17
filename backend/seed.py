@@ -152,6 +152,25 @@ def _seed_banking(session: Session, base: dict) -> None:
             session.add(AccountOwner(account_id=a["id"], person_id=owner))
     session.commit()
 
+    # Cash wallet for manual (cash) transactions — always present, $0 opening,
+    # owned by the adults. custom_name pins the display name to just "Cash".
+    _upsert(session, Account, "cash_wallet", {
+        "institution": "Cash",
+        "account_type": "cash",
+        "kind": "cash",
+        "custom_name": "Cash",
+        "is_liability": False,
+        "opening_balance": 0.0,
+    })
+    for row in session.exec(
+        select(AccountOwner).where(AccountOwner.account_id == "cash_wallet")
+    ).all():
+        session.delete(row)
+    for p in base["household"]:
+        if p["role"] == "adult":
+            session.add(AccountOwner(account_id="cash_wallet", person_id=p["id"]))
+    session.commit()
+
     for t in base["transactions"]:
         _upsert(session, Transaction, t["id"], {
             "account_id": t["accountId"], "date": t["date"],

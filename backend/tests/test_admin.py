@@ -14,7 +14,7 @@ def test_purge_investments_keeps_people_drops_investments(client, engine):
     assert len(client.get("/api/people").json()) > 0
     accounts_before = client.get("/api/accounts").json()
     assert len(accounts_before) > 0
-    bank_kinds = {"chequing", "savings", "credit_card"}
+    bank_kinds = {"chequing", "savings", "credit_card", "cash"}
     bank_ids_before = {a["id"] for a in accounts_before if a["kind"] in bank_kinds}
     assert bank_ids_before  # sanity: fixture data has bank accounts to spare
     assert any(a["kind"] not in bank_kinds for a in accounts_before)  # and investment ones to drop
