@@ -203,9 +203,10 @@ management data with their own endpoint, not render data).
    transfer/duplicate flags.
 2. **Settings — Categorization rules card**: table of keyword → category with inline
    add / edit / delete. Shows rule count in the card subtitle.
-3. **Settings — Import transactions CSV card**: file picker next to the existing
+3. **Import page — Import transactions CSV card**: file picker next to the existing
    investments-import card; on completion shows the full summary including the
-   categorized split and per-row errors.
+   categorized split and per-row errors. (Superseded from an earlier Settings-card plan —
+   the app already has a dedicated Import page, so the card lives there instead.)
 
 ## 10. Testing
 
