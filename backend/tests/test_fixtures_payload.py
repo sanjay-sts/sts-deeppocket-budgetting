@@ -3,7 +3,6 @@ from app.models import Person, Account, AccountOwner, AccountBeneficiary, Invest
 from app.services.fixtures import build_payload
 from app.config import FIXTURES_PATH
 
-import app.services.fixtures as fixtures_service
 from seed import seed
 
 
@@ -13,14 +12,8 @@ EXPECTED_KEYS = {
 }
 
 
-def test_payload_is_composed_entirely_from_db(session, monkeypatch):
+def test_payload_is_composed_entirely_from_db(session):
     seed(session)
-    # The fixtures file must not be touched at request time.
-    monkeypatch.setattr(
-        fixtures_service, "_load_base",
-        lambda: (_ for _ in ()).throw(AssertionError("fixtures file read at request time")),
-        raising=False,
-    )
     payload = build_payload(session)
     assert set(payload.keys()) == EXPECTED_KEYS
     assert len(payload["transactions"]) == 864

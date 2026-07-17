@@ -91,3 +91,15 @@ def test_unrecognized_headers(session):
     summary = import_transactions_csv("foo,bar\n1,2\n", session)
     assert summary["created"] == 0
     assert summary["errors"][0]["row"] == 0
+
+
+def test_bad_running_total_is_a_row_error_not_a_500(session):
+    _setup(session)
+    bad = """Date,merchant,amount,payment,running_total,account
+04/30/2026,COSTCO WHOLESALE W1283,73.92,,N/A,visa
+"""
+    summary = import_transactions_csv(bad, session)  # must not raise
+    assert summary["created"] == 0
+    assert summary["skipped"] == 1
+    assert len(summary["errors"]) == 1
+    assert "N/A" in summary["errors"][0]["reason"]

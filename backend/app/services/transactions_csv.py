@@ -62,6 +62,7 @@ def import_transactions_csv(text: str, session: Session) -> dict:
             account_id = row["account"]
             if not session.get(Account, account_id):
                 raise ValueError(f"unknown account: {account_id!r} (must match an existing account id)")
+            running_total = float(row["running_total"]) if row.get("running_total") else None
         except (ValueError, KeyError) as e:
             summary["skipped"] += 1
             summary["errors"].append({"row": i, "reason": str(e)})
@@ -79,13 +80,12 @@ def import_transactions_csv(text: str, session: Session) -> dict:
 
         merchant = _clean_merchant(raw_merchant)
         category_id, method = categorize(session, raw_merchant, merchant)
-        running = row.get("running_total", "")
         session.add(Transaction(
             id=new_id("tx"), account_id=account_id, date=date,
             raw_merchant=raw_merchant, merchant=merchant, amount=amount,
             category_id=category_id,
             is_transfer=category_id in transfer_categories,
-            running_total=float(running) if running else None,
+            running_total=running_total,
         ))
         session.commit()
         summary["created"] += 1

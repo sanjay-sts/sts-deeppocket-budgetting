@@ -12,7 +12,7 @@ def categorize(session: Session, raw_merchant: str, merchant: str) -> tuple[str,
     Returns (category_id, method) so import summaries can report the split."""
     hit = session.exec(
         select(Transaction)
-        .where(Transaction.merchant == merchant)
+        .where(Transaction.merchant == merchant, Transaction.category_id != UNCLASSIFIED)
         .order_by(Transaction.date.desc())  # type: ignore[attr-defined]
     ).first()
     if hit:
