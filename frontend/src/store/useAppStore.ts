@@ -13,7 +13,14 @@ interface AppState {
   init: () => Promise<void>;
   setSelectedMonth: (ym: string) => void;
   setBudgetMode: (mode: BudgetMode) => void;
-  reclassifyTransaction: (txId: string, categoryId: CategoryId) => void;
+  reclassifyTransaction: (txId: string, categoryId: CategoryId) => Promise<void>;
+  editTransaction: (id: string, b: import('../data/api').TransactionPatchInput) => Promise<void>;
+  rules: import('../data/api').RuleRow[];
+  loadRules: () => Promise<void>;
+  addRule: (b: { keyword: string; categoryId: string }) => Promise<void>;
+  editRule: (id: string, b: { keyword?: string; categoryId?: string }) => Promise<void>;
+  removeRule: (id: string) => Promise<void>;
+  importTransactionsFile: (file: File) => Promise<import('../data/api').TxImportSummary>;
   refetch: () => Promise<void>;
   addPerson: (b: { name: string; role: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
   editPerson: (id: string, b: { name?: string; role?: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
@@ -36,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedMonth: '',
   budgetMode: 'envelope',
   loaded: false,
+  rules: [],
 
   init: async () => {
     if (get().loaded) return;
@@ -51,13 +59,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedMonth: (ym) => set({ selectedMonth: ym }),
   setBudgetMode: (mode) => set({ budgetMode: mode }),
 
-  reclassifyTransaction: (txId, categoryId) => {
+  reclassifyTransaction: async (txId, categoryId) => {
     const f = get().fixtures;
     if (!f) return;
+    // Optimistic: swap the category locally so the UI is instant, then persist.
     const txs: Transaction[] = f.transactions.map((t) =>
       t.id === txId ? { ...t, categoryId } : t,
     );
     set({ fixtures: { ...f, transactions: txs } });
+    try {
+      await api.updateTransaction(txId, { categoryId });
+    } finally {
+      await get().refetch(); // success: confirm; failure: revert to server truth
+    }
+  },
+
+  editTransaction: async (id, b) => { await api.updateTransaction(id, b); await get().refetch(); },
+
+  loadRules: async () => { set({ rules: await api.listRules() }); },
+  addRule: async (b) => { await api.createRule(b); await get().loadRules(); },
+  editRule: async (id, b) => { await api.updateRule(id, b); await get().loadRules(); },
+  removeRule: async (id) => { await api.deleteRule(id); await get().loadRules(); },
+  importTransactionsFile: async (file) => {
+    const summary = await api.importTransactionsCsv(file);
+    await get().refetch();
+    return summary;
   },
 
   refetch: async () => {
