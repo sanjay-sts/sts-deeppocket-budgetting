@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
 import { Progress } from '../components/ui/Progress';
 import { MoneyCell } from '../components/shared/MoneyCell';
@@ -34,11 +35,11 @@ export function Budgets() {
   const ym = useAppStore((s) => s.selectedMonth);
   const budgetMode = useAppStore((s) => s.budgetMode);
   const setBudgetMode = useAppStore((s) => s.setBudgetMode);
-  const [localRollover, setLocalRollover] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(fixtures.budget.lines.map((l) => [l.categoryId, l.rollover])),
-  );
+  const saveBudgetLine = useAppStore((s) => s.saveBudgetLine);
+  const removeBudgetLine = useAppStore((s) => s.removeBudgetLine);
 
   const catById = new Map(fixtures.categories.map((c) => [c.id, c]));
+  const lineByCat = new Map(fixtures.budget.lines.map((l) => [l.categoryId, l]));
   const status = useMemo(() => budgetStatus(fixtures, ym, fixtures.budget), [fixtures, ym]);
   const totals = useMemo(() => monthTotalsFor(fixtures, ym), [fixtures, ym]);
 
@@ -116,13 +117,24 @@ export function Budgets() {
                 <th className="py-2 text-right">Remaining</th>
                 <th className="py-2 w-1/3">Progress</th>
                 {budgetMode === 'envelope' && <th className="py-2 text-center">Rollover</th>}
+                <th className="py-2 w-8"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {status.map((s) => (
                 <tr key={s.categoryId} className="hover:bg-bg-hover">
                   <td className="py-2 text-ink">{s.categoryName}</td>
-                  <td className="py-2 text-right num text-ink-muted">{cad(s.budgeted, true)}</td>
+                  <td className="py-2 text-right num text-ink-muted">
+                    <CapCell
+                      value={s.budgeted}
+                      onCommit={(v) =>
+                        void saveBudgetLine(s.categoryId, {
+                          monthlyCap: v,
+                          rollover: lineByCat.get(s.categoryId)?.rollover ?? false,
+                        })
+                      }
+                    />
+                  </td>
                   <td className="py-2 text-right num text-ink">{cad(s.spent, true)}</td>
                   <td className={`py-2 text-right num ${s.over ? 'text-down' : 'text-up'}`}>
                     {cad(s.remaining, true)}
@@ -137,18 +149,36 @@ export function Budgets() {
                     <td className="py-2 text-center">
                       <input
                         type="checkbox"
-                        checked={localRollover[s.categoryId] ?? false}
+                        checked={lineByCat.get(s.categoryId)?.rollover ?? false}
                         onChange={(e) =>
-                          setLocalRollover((prev) => ({ ...prev, [s.categoryId]: e.target.checked }))
+                          void saveBudgetLine(s.categoryId, {
+                            monthlyCap: lineByCat.get(s.categoryId)?.monthlyCap ?? s.budgeted,
+                            rollover: e.target.checked,
+                          })
                         }
                         className="accent-brand"
                       />
                     </td>
                   )}
+                  <td className="py-2 text-right">
+                    <button
+                      className="text-ink-dim hover:text-down"
+                      title="Remove from budget"
+                      onClick={() => void removeBudgetLine(s.categoryId)}
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <AddBudgetLine
+            categories={fixtures.categories.filter(
+              (c) => !lineByCat.has(c.id) && c.id !== 'unclassified' && c.group !== 'income',
+            )}
+            onAdd={(categoryId, cap) => void saveBudgetLine(categoryId, { monthlyCap: cap, rollover: false })}
+          />
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -215,6 +245,81 @@ export function Budgets() {
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function CapCell({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+
+  if (!editing) {
+    return (
+      <button
+        className="num text-ink-muted hover:text-ink underline decoration-dotted underline-offset-4"
+        onClick={() => { setDraft(String(value)); setEditing(true); }}
+      >
+        {cad(value, true)}
+      </button>
+    );
+  }
+  const commit = () => {
+    const v = Number(draft);
+    if (Number.isFinite(v) && v >= 0 && v !== value) onCommit(v);
+    setEditing(false);
+  };
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') setEditing(false);
+      }}
+      className="w-24 bg-bg-elev border border-line rounded-md px-2 py-0.5 text-sm text-ink text-right num focus:outline-none focus:border-brand"
+    />
+  );
+}
+
+function AddBudgetLine({
+  categories,
+  onAdd,
+}: {
+  categories: { id: string; name: string }[];
+  onAdd: (categoryId: string, cap: number) => void;
+}) {
+  const [categoryId, setCategoryId] = useState('');
+  const [cap, setCap] = useState('');
+  if (categories.length === 0) return null;
+  const capNum = Number(cap);
+  const valid = categoryId !== '' && cap !== '' && Number.isFinite(capNum) && capNum >= 0;
+  return (
+    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line text-sm">
+      <span className="text-xs text-ink-dim">Add category to budget</span>
+      <select
+        value={categoryId}
+        onChange={(e) => setCategoryId(e.target.value)}
+        className="bg-bg-elev border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-brand"
+      >
+        <option value="">Choose…</option>
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+      <input
+        value={cap}
+        onChange={(e) => setCap(e.target.value)}
+        placeholder="Monthly cap"
+        className="w-28 bg-bg-elev border border-line rounded-md px-2 py-1.5 text-sm text-ink text-right num placeholder:text-ink-dim focus:outline-none focus:border-brand"
+      />
+      <Button
+        disabled={!valid}
+        onClick={() => { onAdd(categoryId, capNum); setCategoryId(''); setCap(''); }}
+      >
+        Add
+      </Button>
     </div>
   );
 }
