@@ -14,11 +14,11 @@ Check the box here (and commit it) when a task lands.
 - [x] Task 4: Transactions — POST (manual), DELETE, PATCH extension for manual facts (`99eded7`)
 - [x] Task 5: Frontend types, seam methods, and `cash`-kind plumbing (`36c3148`)
 - [x] Task 6: Toast slice, ToastHost, store actions + retrofit (`a031602`)
-- [ ] Task 7: Settings — Categories card (CRUD UI)
-- [ ] Task 8: Budgets page — inline caps, persisted rollover, add/remove lines
-- [ ] Task 9: Transactions page — cash entry, manual badge, manual editor + delete
-- [ ] Task 10: Rules card — inline keyword editing (frontend only)
-- [ ] Task 11: Docs + full sweep
+- [x] Task 7: Settings — Categories card (CRUD UI) (`6aa47e1`)
+- [x] Task 8: Budgets page — inline caps, persisted rollover, add/remove lines (`1950cd2`)
+- [x] Task 9: Transactions page — cash entry, manual badge, manual editor + delete (`c004657`)
+- [x] Task 10: Rules card — inline keyword editing (frontend only) (`d9080f6`)
+- [x] Task 11: Docs + full sweep (`CLAUDE.md`, verification sweep green)
 
 Reminders (details in the plan's Global Constraints):
 
