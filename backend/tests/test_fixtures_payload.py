@@ -26,7 +26,7 @@ def test_payload_is_composed_entirely_from_db(session):
         "id": "t1", "date": "2025-05-15", "accountId": "sanjay_chequing",
         "rawMerchant": "PAYROLL DEP NUTRIEN", "merchant": "Payroll Dep Nutrien",
         "amount": 4666.73, "categoryId": "salary", "personId": "sanjay",
-        "runningTotal": 16015.09,
+        "runningTotal": 16015.09, "source": "bank",
     }
 
 
@@ -96,3 +96,10 @@ def test_cesg_grants_derived_from_contributions(session):
     session.commit()
     payload = build_payload(session)
     assert any(g["beneficiaryId"] == "k1" and g["amount"] == 200.0 for g in payload["cesgGrants"])
+
+
+def test_payload_transactions_include_source_and_cash_opening_balance(session):
+    seed(session)
+    payload = build_payload(session)
+    assert all(t["source"] == "bank" for t in payload["transactions"])
+    assert "cash_wallet" in payload["meta"]["openingBalances"]

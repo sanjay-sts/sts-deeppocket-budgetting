@@ -4,7 +4,7 @@ from sqlmodel import select
 
 from app.config import FIXTURES_PATH
 from app.constants import BANK_KINDS
-from app.models import Account, AccountOwner, AppMeta, BudgetConfig, BudgetLine, Category, Transaction
+from app.models import Account, AccountOwner, AppMeta, BudgetConfig, BudgetLine, Category, Transaction, Person
 from seed import seed
 
 
@@ -44,7 +44,8 @@ def test_seed_is_idempotent(session):
     assert len(session.exec(select(Transaction)).all()) == len(base["transactions"])
     assert len(session.exec(select(Category)).all()) == len(base["categories"])
     bank = [a for a in session.exec(select(Account)).all() if a.kind in BANK_KINDS]
-    assert len(bank) == sum(1 for a in _base()["accounts"] if a["kind"] in BANK_KINDS)
+    # +1 for the seeded cash_wallet account
+    assert len(bank) == sum(1 for a in _base()["accounts"] if a["kind"] in BANK_KINDS) + 1
 
 
 def test_investments_empty_keeps_banking(session):
@@ -54,3 +55,33 @@ def test_investments_empty_keeps_banking(session):
     assert len(session.exec(select(Transaction)).all()) > 0
     inv = [a for a in session.exec(select(Account)).all() if a.kind not in BANK_KINDS]
     assert inv == []
+
+
+def test_seed_creates_cash_wallet(session):
+    seed(session)
+    wallet = session.get(Account, "cash_wallet")
+    assert wallet is not None
+    assert wallet.kind == "cash"
+    assert wallet.institution == "Cash"
+    assert wallet.custom_name == "Cash"
+    assert wallet.opening_balance == 0.0
+    owners = session.exec(
+        select(AccountOwner).where(AccountOwner.account_id == "cash_wallet")
+    ).all()
+    adults = {p.id for p in session.exec(select(Person)).all() if p.role == "adult"}
+    assert {o.person_id for o in owners} == adults
+
+
+def test_cash_wallet_seed_is_idempotent(session):
+    seed(session)
+    seed(session)
+    owners = session.exec(
+        select(AccountOwner).where(AccountOwner.account_id == "cash_wallet")
+    ).all()
+    assert len(owners) == len({o.person_id for o in owners})
+
+
+def test_seeded_transactions_have_bank_source(session):
+    seed(session)
+    txs = session.exec(select(Transaction)).all()
+    assert txs and all(t.source == "bank" for t in txs)
