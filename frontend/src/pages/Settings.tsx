@@ -341,6 +341,8 @@ export function RulesSection() {
   const [keyword, setKeyword] = useState('');
   const [categoryId, setCategoryId] = useState(fixtures.categories[0]?.id ?? '');
   const [error, setError] = useState('');
+  const [editingKeywordId, setEditingKeywordId] = useState<string | null>(null);
+  const [keywordDraft, setKeywordDraft] = useState('');
 
   useEffect(() => { void loadRules(); }, [loadRules]);
 
@@ -384,7 +386,36 @@ export function RulesSection() {
           <tbody className="divide-y divide-line">
             {rules.map((r) => (
               <tr key={r.id}>
-                <td className="py-2 text-ink">{r.keyword}</td>
+                <td className="py-2 text-ink">
+                  {editingKeywordId === r.id ? (
+                    <input
+                      autoFocus
+                      value={keywordDraft}
+                      onChange={(e) => setKeywordDraft(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Escape') setEditingKeywordId(null);
+                        if (e.key === 'Enter' && keywordDraft.trim()) {
+                          setError('');
+                          try {
+                            await editRule(r.id, { keyword: keywordDraft.trim() });
+                            setEditingKeywordId(null);
+                          } catch (err) {
+                            setError((err as Error).message);
+                          }
+                        }
+                      }}
+                      onBlur={() => setEditingKeywordId(null)}
+                      className="bg-bg-elev border border-line rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-brand w-40"
+                    />
+                  ) : (
+                    <button
+                      className="hover:text-ink underline decoration-dotted underline-offset-4"
+                      onClick={() => { setKeywordDraft(r.keyword); setEditingKeywordId(r.id); setError(''); }}
+                    >
+                      {r.keyword}
+                    </button>
+                  )}
+                </td>
                 <td className="py-2">
                   <select
                     value={r.categoryId}
