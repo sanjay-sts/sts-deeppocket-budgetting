@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { ToastHost } from '../shared/ToastHost';
 import { useAppStore } from '../../store/useAppStore';
 
 const titles: Record<string, string> = {
@@ -50,6 +51,7 @@ export function Shell() {
           <Outlet />
         </main>
       </div>
+      <ToastHost />
     </div>
   );
 }
