@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -48,7 +48,9 @@ export function Shell() {
           showMonthSelector={monthScopedRoutes.has(location.pathname)}
         />
         <main className="flex-1 overflow-y-auto scrollbar-thin p-6">
-          <Outlet />
+          <Suspense fallback={<div className="text-ink-muted text-sm">Loading…</div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <ToastHost />
