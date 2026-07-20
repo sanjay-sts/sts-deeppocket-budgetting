@@ -12,8 +12,8 @@ Check the box here (and commit it) when a task lands.
 - [x] Task 2: Categories router — POST / PATCH / DELETE with cascade (`928ca9a`)
 - [x] Task 3: Budget router — line upsert/delete, config patch (`f660d36`)
 - [x] Task 4: Transactions — POST (manual), DELETE, PATCH extension for manual facts (`99eded7`)
-- [ ] Task 5: Frontend types, seam methods, and `cash`-kind plumbing
-- [ ] Task 6: Toast slice, ToastHost, store actions + retrofit
+- [x] Task 5: Frontend types, seam methods, and `cash`-kind plumbing (`36c3148`)
+- [x] Task 6: Toast slice, ToastHost, store actions + retrofit (`a031602`)
 - [ ] Task 7: Settings — Categories card (CRUD UI)
 - [ ] Task 8: Budgets page — inline caps, persisted rollover, add/remove lines
 - [ ] Task 9: Transactions page — cash entry, manual badge, manual editor + delete
