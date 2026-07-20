@@ -131,3 +131,18 @@ class BudgetConfigPatch(BaseModel):
 
     mode: Optional[str] = None
     targetSavingsRate: Optional[float] = None
+
+
+class TransactionBulkUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str]
+    categoryId: Optional[str] = None
+    isTransfer: Optional[bool] = None
+    isDuplicate: Optional[bool] = None
+
+
+class TransactionBulkDelete(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str]
