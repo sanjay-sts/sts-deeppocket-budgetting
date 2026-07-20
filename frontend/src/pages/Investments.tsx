@@ -25,6 +25,7 @@ import type { AccountKind, ContributionKind } from '../types';
 const KIND_COLORS: Record<AccountKind, string> = {
   chequing: '#64748b',
   savings: '#94a3b8',
+  cash: '#475569',
   credit_card: '#f87171',
   tfsa: '#34d399',
   rrsp: '#60a5fa',
@@ -38,6 +39,7 @@ const KIND_COLORS: Record<AccountKind, string> = {
 const KIND_LABEL: Record<AccountKind, string> = {
   chequing: 'Chequing',
   savings: 'Savings',
+  cash: 'Cash',
   credit_card: 'Credit Card',
   tfsa: 'TFSA',
   rrsp: 'RRSP',

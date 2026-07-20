@@ -104,7 +104,7 @@ export interface AccountBalance {
 }
 
 export function latestCashBalances(fixtures: Fixtures): AccountBalance[] {
-  const cashKinds: Account['kind'][] = ['chequing', 'savings'];
+  const cashKinds: Account['kind'][] = ['chequing', 'savings', 'cash'];
   const result: AccountBalance[] = [];
   for (const acc of fixtures.accounts) {
     if (!cashKinds.includes(acc.kind)) continue;
@@ -179,11 +179,11 @@ export interface KindBreakdownRow {
 }
 
 const KIND_ORDER: AccountKind[] = [
-  'chequing', 'savings', 'tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp',
+  'chequing', 'savings', 'cash', 'tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp',
   'non_registered', 'crypto', 'credit_card',
 ];
 const KIND_LABELS: Record<AccountKind, string> = {
-  chequing: 'Chequing', savings: 'Savings',
+  chequing: 'Chequing', savings: 'Savings', cash: 'Cash',
   tfsa: 'TFSA', rrsp: 'RRSP', resp: 'RESP', fhsa: 'FHSA',
   dcpp: 'DCPP pension', non_registered: 'Non-registered', crypto: 'Crypto',
   credit_card: 'Credit card debt',
@@ -217,7 +217,7 @@ export interface NetWorthPoint {
 export function netWorthTrend(fixtures: Fixtures): NetWorthPoint[] {
   const months = [...new Set(fixtures.investments.map((s) => monthKey(s.date)))].sort();
   const cashAccountIds = new Set(
-    fixtures.accounts.filter((a) => a.kind === 'chequing' || a.kind === 'savings').map((a) => a.id),
+    fixtures.accounts.filter((a) => a.kind === 'chequing' || a.kind === 'savings' || a.kind === 'cash').map((a) => a.id),
   );
   const ccAccountIds = new Set(
     fixtures.accounts.filter((a) => a.kind === 'credit_card').map((a) => a.id),
@@ -420,9 +420,9 @@ function selfTest(): void {
     { id: 'transfer', name: 'Transfer', group: 'transfers' },
   ];
   const fakeTxs: Transaction[] = [
-    { id: '1', date: '2026-03-15', accountId: 'a1', rawMerchant: 'X', merchant: 'X', amount: 5000, categoryId: 'salary' },
-    { id: '2', date: '2026-03-20', accountId: 'a1', rawMerchant: 'Y', merchant: 'Y', amount: -500, categoryId: 'groceries' },
-    { id: '3', date: '2026-03-25', accountId: 'a1', rawMerchant: 'Z', merchant: 'Z', amount: -100, categoryId: 'transfer', isTransfer: true },
+    { id: '1', date: '2026-03-15', accountId: 'a1', rawMerchant: 'X', merchant: 'X', amount: 5000, categoryId: 'salary', source: 'bank' },
+    { id: '2', date: '2026-03-20', accountId: 'a1', rawMerchant: 'Y', merchant: 'Y', amount: -500, categoryId: 'groceries', source: 'bank' },
+    { id: '3', date: '2026-03-25', accountId: 'a1', rawMerchant: 'Z', merchant: 'Z', amount: -100, categoryId: 'transfer', isTransfer: true, source: 'bank' },
   ];
   const fake: Fixtures = {
     household: [],

@@ -118,6 +118,11 @@ export interface TransactionPatchInput {
   isDuplicate?: boolean;
   notes?: string;   // '' clears
   tags?: string[];  // [] clears
+  // manual rows only — 422 on bank rows:
+  date?: string;
+  merchant?: string;
+  amount?: number;
+  accountId?: string;
 }
 
 export const updateTransaction = (id: string, b: TransactionPatchInput) =>
@@ -145,3 +150,53 @@ export async function importTransactionsCsv(file: File): Promise<TxImportSummary
     await fetch(`${BASE}/api/import/transactions-csv`, { method: 'POST', body: fd }),
   );
 }
+
+import type { Category, CategoryGroup, Bucket503020, BudgetMode } from '../types';
+
+export interface CategoryInput {
+  name: string;
+  group: CategoryGroup;
+  bucket503020?: Bucket503020;
+  isEssential?: boolean;
+}
+export interface CategoryPatchInput {
+  name?: string;
+  group?: CategoryGroup;
+  bucket503020?: Bucket503020 | ''; // '' clears
+  isEssential?: boolean;
+}
+export interface CategoryDeleteResult {
+  deleted: boolean;
+  transactionsReassigned: number;
+  rulesDeleted: number;
+  budgetLineDeleted: boolean;
+}
+
+export const createCategory = (b: CategoryInput) => send<Category>('POST', '/api/categories', b);
+export const updateCategory = (id: string, b: CategoryPatchInput) =>
+  send<Category>('PATCH', `/api/categories/${id}`, b);
+export const deleteCategory = (id: string) =>
+  send<CategoryDeleteResult>('DELETE', `/api/categories/${id}`);
+
+export interface BudgetLineWire { categoryId: string; monthlyCap: number; rollover: boolean }
+
+export const upsertBudgetLine = (categoryId: string, b: { monthlyCap: number; rollover: boolean }) =>
+  send<BudgetLineWire>('PUT', `/api/budget/lines/${categoryId}`, b);
+export const deleteBudgetLine = (categoryId: string) =>
+  send<void>('DELETE', `/api/budget/lines/${categoryId}`);
+export const updateBudgetConfig = (b: { mode?: BudgetMode; targetSavingsRate?: number }) =>
+  send<{ mode: BudgetMode; targetSavingsRate?: number }>('PATCH', '/api/budget/config', b);
+
+export interface TransactionCreateInput {
+  accountId: string;
+  date: string;
+  merchant: string;
+  amount: number;
+  categoryId?: string; // omitted -> server auto-categorizes
+  notes?: string;
+  tags?: string[];
+}
+
+export const createTransaction = (b: TransactionCreateInput) =>
+  send<Transaction>('POST', '/api/transactions', b);
+export const deleteTransaction = (id: string) => send<void>('DELETE', `/api/transactions/${id}`);

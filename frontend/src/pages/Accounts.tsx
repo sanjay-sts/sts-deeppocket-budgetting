@@ -34,7 +34,7 @@ export function Accounts() {
 
   const groups: Record<keyof typeof groupLabels, Account[]> = { cash: [], credit: [], investments: [] };
   for (const acc of fixtures.accounts) {
-    if (acc.kind === 'chequing' || acc.kind === 'savings') groups.cash.push(acc);
+    if (acc.kind === 'chequing' || acc.kind === 'savings' || acc.kind === 'cash') groups.cash.push(acc);
     else if (acc.kind === 'credit_card') groups.credit.push(acc);
     else groups.investments.push(acc);
   }
