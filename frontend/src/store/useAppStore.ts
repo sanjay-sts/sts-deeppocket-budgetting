@@ -46,6 +46,8 @@ interface AppState {
   removeBudgetLine: (categoryId: string) => Promise<void>;
   addTransaction: (b: import('../data/api').TransactionCreateInput) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
+  bulkUpdateTransactions: (b: import('../data/api').BulkUpdateInput) => Promise<import('../data/api').BulkUpdateResult>;
+  bulkDeleteTransactions: (ids: string[]) => Promise<import('../data/api').BulkDeleteResult>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -174,5 +176,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().pushToast("Couldn't save deletion — changes reverted");
     }
     await get().refetch();
+  },
+  bulkUpdateTransactions: async (b) => {
+    const result = await api.bulkUpdateTransactions(b);
+    await get().refetch();
+    return result;
+  },
+  bulkDeleteTransactions: async (ids) => {
+    const result = await api.bulkDeleteTransactions(ids);
+    await get().refetch();
+    return result;
   },
 }));
