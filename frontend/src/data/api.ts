@@ -151,6 +151,40 @@ export async function importTransactionsCsv(file: File): Promise<TxImportSummary
   );
 }
 
+export interface CsvPreview {
+  headers: string[];
+  sampleRows: Record<string, string>[];
+  rowCount: number;
+}
+export interface CsvMapping {
+  dateColumn: string;
+  merchantColumn: string;
+  amountColumn?: string;
+  amountInvert?: boolean;
+  debitColumn?: string;
+  creditColumn?: string;
+  accountColumn?: string;
+  accountId?: string;
+  dayFirst?: boolean;
+}
+
+export async function previewTransactionsCsv(file: File): Promise<CsvPreview> {
+  const fd = new FormData();
+  fd.append('file', file);
+  return json<CsvPreview>(
+    await fetch(`${BASE}/api/import/transactions-csv/preview`, { method: 'POST', body: fd }),
+  );
+}
+
+export async function importTransactionsCsvMapped(file: File, mapping: CsvMapping): Promise<TxImportSummary> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('mapping', JSON.stringify(mapping));
+  return json<TxImportSummary>(
+    await fetch(`${BASE}/api/import/transactions-csv/mapped`, { method: 'POST', body: fd }),
+  );
+}
+
 import type { Category, CategoryGroup, Bucket503020, BudgetMode } from '../types';
 
 export interface CategoryInput {

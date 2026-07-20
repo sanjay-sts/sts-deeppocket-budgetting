@@ -21,6 +21,8 @@ interface AppState {
   editRule: (id: string, b: { keyword?: string; categoryId?: string }) => Promise<void>;
   removeRule: (id: string) => Promise<void>;
   importTransactionsFile: (file: File) => Promise<import('../data/api').TxImportSummary>;
+  previewTransactionsCsv: (file: File) => Promise<import('../data/api').CsvPreview>;
+  importTransactionsMapped: (file: File, mapping: import('../data/api').CsvMapping) => Promise<import('../data/api').TxImportSummary>;
   refetch: () => Promise<void>;
   addPerson: (b: { name: string; role: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
   editPerson: (id: string, b: { name?: string; role?: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
@@ -115,6 +117,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeRule: async (id) => { await api.deleteRule(id); await get().loadRules(); },
   importTransactionsFile: async (file) => {
     const summary = await api.importTransactionsCsv(file);
+    await get().refetch();
+    return summary;
+  },
+  previewTransactionsCsv: (file) => api.previewTransactionsCsv(file),
+  importTransactionsMapped: async (file, mapping) => {
+    const summary = await api.importTransactionsCsvMapped(file, mapping);
     await get().refetch();
     return summary;
   },
