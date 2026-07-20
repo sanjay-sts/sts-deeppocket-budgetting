@@ -200,3 +200,17 @@ export interface TransactionCreateInput {
 export const createTransaction = (b: TransactionCreateInput) =>
   send<Transaction>('POST', '/api/transactions', b);
 export const deleteTransaction = (id: string) => send<void>('DELETE', `/api/transactions/${id}`);
+
+export interface BulkUpdateInput {
+  ids: string[];
+  categoryId?: string;
+  isTransfer?: boolean;
+  isDuplicate?: boolean;
+}
+export interface BulkUpdateResult { updated: number; notFound: string[] }
+export interface BulkDeleteResult { deleted: number; skippedNonManual: string[]; notFound: string[] }
+
+export const bulkUpdateTransactions = (b: BulkUpdateInput) =>
+  send<BulkUpdateResult>('POST', '/api/transactions/bulk', b);
+export const bulkDeleteTransactions = (ids: string[]) =>
+  send<BulkDeleteResult>('POST', '/api/transactions/bulk-delete', { ids });

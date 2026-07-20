@@ -14,6 +14,8 @@ vi.mock('../../data/api', () => ({
   updateBudgetConfig: vi.fn().mockResolvedValue({ mode: 'zero_based' }),
   createTransaction: vi.fn().mockResolvedValue({ id: 'txn_m_1' }),
   deleteTransaction: vi.fn().mockResolvedValue(undefined),
+  bulkUpdateTransactions: vi.fn().mockResolvedValue({ updated: 2, notFound: [] }),
+  bulkDeleteTransactions: vi.fn().mockResolvedValue({ deleted: 1, skippedNonManual: ['b1'], notFound: [] }),
 }));
 
 import * as api from '../../data/api';
@@ -98,5 +100,19 @@ describe('m4 actions', () => {
     await expect(
       useAppStore.getState().addTransaction({ accountId: 'cash_wallet', date: '2026-07-10', merchant: 'M', amount: -5 }),
     ).rejects.toThrow();
+  });
+
+  it('bulkUpdateTransactions returns the summary and refetches', async () => {
+    const r = await useAppStore.getState().bulkUpdateTransactions({ ids: ['t1', 't2'], categoryId: 'dining' });
+    expect(r.updated).toBe(2);
+    expect(api.bulkUpdateTransactions).toHaveBeenCalledWith({ ids: ['t1', 't2'], categoryId: 'dining' });
+    expect(api.loadFixtures).toHaveBeenCalled();
+  });
+
+  it('bulkDeleteTransactions returns the summary incl. skipped bank rows', async () => {
+    const r = await useAppStore.getState().bulkDeleteTransactions(['m1', 'b1']);
+    expect(r.deleted).toBe(1);
+    expect(r.skippedNonManual).toEqual(['b1']);
+    expect(api.bulkDeleteTransactions).toHaveBeenCalledWith(['m1', 'b1']);
   });
 });
