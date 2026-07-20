@@ -13,9 +13,12 @@ fixtures file is seed input only). Transactions are editable (category, transfer
 flags, notes, tags via `PATCH`); bank-imported facts (amount/date/merchant/account) stay
 immutable, but **manual** transactions are fully editable and deletable — cash and missed
 entries are added on the Transactions page (`POST`/`DELETE /api/transactions`, into the
-seeded Cash wallet account) and carry a `manual` badge. Bank and credit-card CSV import
-ships with header auto-detection and idempotent dedup (`POST /api/import/transactions-csv`,
-UI card on the Import page). Auto-categorization runs history → user-editable rules →
+seeded Cash wallet account) and carry a `manual` badge. Transactions support **bulk
+operations** — multi-select rows to recategorize, flag transfer/duplicate, or delete manual
+entries (`POST /api/transactions/bulk`, `/bulk-delete`). Bank and credit-card CSV import
+ships with header auto-detection and idempotent dedup (`POST /api/import/transactions-csv`),
+plus a **column-mapping wizard** for any other CSV shape (`/preview` + `/mapped` endpoints,
+third card on the Import page). Auto-categorization runs history → user-editable rules →
 unclassified (rules CRUD at `/api/rules`, managed in a Settings card with inline keyword
 editing and a create-rule prompt after reclassify). **Categories** are CRUD-editable
 (`/api/categories`, Settings "Categories" card; deleting one cascades its transactions to
@@ -108,9 +111,8 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
 
 ## Known gaps (tracked on the GitHub project board)
 
-- `date-fns` is declared in `package.json` but currently unused.
-- Manual transaction entry covers cash/missed rows; bulk transaction CRUD and a
-  configurable per-bank import mapping wizard remain future candidates.
+- Saved per-bank import profiles (remember a column mapping by name) are not yet stored;
+  the mapping wizard is configured per import.
 
 ## Working here
 

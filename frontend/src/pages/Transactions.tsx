@@ -14,11 +14,15 @@ export function Transactions() {
   const addRule = useAppStore((s) => s.addRule);
   const addTransaction = useAppStore((s) => s.addTransaction);
   const removeTransaction = useAppStore((s) => s.removeTransaction);
+  const bulkUpdate = useAppStore((s) => s.bulkUpdateTransactions);
+  const bulkDelete = useAppStore((s) => s.bulkDeleteTransactions);
+  const pushToast = useAppStore((s) => s.pushToast);
 
   // After a reclassify, offer to make it a rule ("Always categorize X as Y?").
   const [rulePrompt, setRulePrompt] = useState<{ txId: string; merchant: string; categoryId: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [accountFilter, setAccountFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -54,10 +58,30 @@ export function Transactions() {
   useEffect(() => {
     setRulePrompt(null);
     setExpandedId(null);
+    setSelected(new Set());
   }, [accountFilter, categoryFilter, monthFilter, search]);
 
   const totalInflow = rows.reduce((a, t) => (t.amount > 0 ? a + t.amount : a), 0);
   const totalOutflow = rows.reduce((a, t) => (t.amount < 0 ? a + -t.amount : a), 0);
+
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const allVisibleSelected = rows.length > 0 && rows.every((t) => selected.has(t.id));
+  const toggleSelectAll = () =>
+    setSelected(allVisibleSelected ? new Set() : new Set(rows.map((t) => t.id)));
+
+  async function applyBulk(fn: () => Promise<string>) {
+    try {
+      pushToast(await fn());
+      setSelected(new Set());
+    } catch {
+      pushToast("Couldn't apply bulk change — nothing was saved");
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -145,10 +169,86 @@ export function Transactions() {
             <Button variant="ghost" onClick={() => setRulePrompt(null)}>Dismiss</Button>
           </div>
         )}
+        {selected.size > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-bg-elev border border-line px-3 py-2 text-sm">
+            <span className="text-ink-muted">{selected.size} selected</span>
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const categoryId = e.target.value;
+                e.target.value = '';
+                if (!categoryId) return;
+                const name = catById.get(categoryId)?.name ?? categoryId;
+                const ids = [...selected];
+                void applyBulk(async () => {
+                  const r = await bulkUpdate({ ids, categoryId });
+                  return `Recategorized ${r.updated} transaction${r.updated === 1 ? '' : 's'} to ${name}`;
+                });
+              }}
+              className="bg-bg border border-line rounded-md px-2 py-1 text-xs text-ink focus:outline-none focus:border-brand"
+            >
+              <option value="">Recategorize to…</option>
+              {fixtures.categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const ids = [...selected];
+                void applyBulk(async () => {
+                  const r = await bulkUpdate({ ids, isTransfer: true });
+                  return `Marked ${r.updated} as transfer`;
+                });
+              }}
+            >
+              Mark transfer
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const ids = [...selected];
+                void applyBulk(async () => {
+                  const r = await bulkUpdate({ ids, isDuplicate: true });
+                  return `Marked ${r.updated} as duplicate`;
+                });
+              }}
+            >
+              Mark duplicate
+            </Button>
+            <button
+              className="text-down text-xs px-2 py-1"
+              onClick={() => {
+                const ids = [...selected];
+                void applyBulk(async () => {
+                  const r = await bulkDelete(ids);
+                  const skipped = r.skippedNonManual.length;
+                  return skipped
+                    ? `Deleted ${r.deleted} manual entr${r.deleted === 1 ? 'y' : 'ies'}; ${skipped} bank row${skipped === 1 ? '' : 's'} skipped (immutable)`
+                    : `Deleted ${r.deleted} manual entr${r.deleted === 1 ? 'y' : 'ies'}`;
+                });
+              }}
+            >
+              Delete (manual only)
+            </button>
+            <button className="text-ink-dim hover:text-ink text-xs ml-auto" onClick={() => setSelected(new Set())}>
+              Clear
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-ink-dim uppercase tracking-wider border-b border-line">
+                <th className="py-2 pr-3 w-8">
+                  <input
+                    type="checkbox"
+                    className="accent-brand"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </th>
                 <th className="py-2 pr-4">Date</th>
                 <th className="py-2 pr-4">Merchant</th>
                 <th className="py-2 pr-4">Category</th>
@@ -162,7 +262,16 @@ export function Transactions() {
                 const acc = accById.get(t.accountId);
                 return (
                   <Fragment key={t.id}>
-                  <tr className="hover:bg-bg-hover">
+                  <tr className={`hover:bg-bg-hover ${selected.has(t.id) ? 'bg-brand/5' : ''}`}>
+                    <td className="py-2 pr-3">
+                      <input
+                        type="checkbox"
+                        className="accent-brand"
+                        checked={selected.has(t.id)}
+                        onChange={() => toggleSelected(t.id)}
+                        aria-label={`Select ${t.merchant}`}
+                      />
+                    </td>
                     <td className="py-2 pr-4 text-ink-muted whitespace-nowrap">{formatDate(t.date)}</td>
                     <td
                       className="py-2 pr-4 text-ink cursor-pointer"
@@ -198,7 +307,7 @@ export function Transactions() {
                   </tr>
                   {expandedId === t.id && (
                     <tr className="bg-bg-elev/50">
-                      <td colSpan={5} className="py-3 px-4">
+                      <td colSpan={6} className="py-3 px-4">
                         <TxEditor
                           tx={t}
                           accounts={fixtures.accounts.filter((a) =>

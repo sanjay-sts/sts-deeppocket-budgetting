@@ -7,7 +7,12 @@ from sqlmodel import Session
 
 from ..db import get_session
 from ..models import Account, Category, Transaction
-from ..schemas import TransactionCreate, TransactionPatch
+from ..schemas import (
+    TransactionBulkDelete,
+    TransactionBulkUpdate,
+    TransactionCreate,
+    TransactionPatch,
+)
 from ..services.categorize import categorize
 from ..services.fixtures import _transaction_out
 
@@ -51,6 +56,52 @@ def create_transaction(body: TransactionCreate, session: Session = Depends(get_s
     session.commit()
     session.refresh(tx)
     return _transaction_out(tx)
+
+
+@router.post("/bulk")
+def bulk_update(body: TransactionBulkUpdate, session: Session = Depends(get_session)) -> dict:
+    if not body.ids:
+        raise HTTPException(status_code=422, detail="No transaction ids provided")
+    # Category/flags are editable on any row (only date/merchant/amount/account are locked
+    # on bank rows), so bulk update never touches immutable facts.
+    if body.categoryId is not None and not session.get(Category, body.categoryId):
+        raise HTTPException(status_code=422, detail=f"Unknown category: {body.categoryId}")
+    updated = 0
+    not_found: list[str] = []
+    for tid in body.ids:
+        tx = session.get(Transaction, tid)
+        if not tx:
+            not_found.append(tid)
+            continue
+        if body.categoryId is not None:
+            tx.category_id = body.categoryId
+        if body.isTransfer is not None:
+            tx.is_transfer = body.isTransfer
+        if body.isDuplicate is not None:
+            tx.is_duplicate = body.isDuplicate
+        session.add(tx)
+        updated += 1
+    session.commit()
+    return {"updated": updated, "notFound": not_found}
+
+
+@router.post("/bulk-delete")
+def bulk_delete(body: TransactionBulkDelete, session: Session = Depends(get_session)) -> dict:
+    deleted = 0
+    skipped_non_manual: list[str] = []
+    not_found: list[str] = []
+    for tid in body.ids:
+        tx = session.get(Transaction, tid)
+        if not tx:
+            not_found.append(tid)
+            continue
+        if tx.source != "manual":
+            skipped_non_manual.append(tid)
+            continue
+        session.delete(tx)
+        deleted += 1
+    session.commit()
+    return {"deleted": deleted, "skippedNonManual": skipped_non_manual, "notFound": not_found}
 
 
 @router.patch("/{tx_id}")

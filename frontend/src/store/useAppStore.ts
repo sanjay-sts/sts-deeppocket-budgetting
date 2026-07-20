@@ -21,6 +21,8 @@ interface AppState {
   editRule: (id: string, b: { keyword?: string; categoryId?: string }) => Promise<void>;
   removeRule: (id: string) => Promise<void>;
   importTransactionsFile: (file: File) => Promise<import('../data/api').TxImportSummary>;
+  previewTransactionsCsv: (file: File) => Promise<import('../data/api').CsvPreview>;
+  importTransactionsMapped: (file: File, mapping: import('../data/api').CsvMapping) => Promise<import('../data/api').TxImportSummary>;
   refetch: () => Promise<void>;
   addPerson: (b: { name: string; role: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
   editPerson: (id: string, b: { name?: string; role?: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
@@ -46,6 +48,8 @@ interface AppState {
   removeBudgetLine: (categoryId: string) => Promise<void>;
   addTransaction: (b: import('../data/api').TransactionCreateInput) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
+  bulkUpdateTransactions: (b: import('../data/api').BulkUpdateInput) => Promise<import('../data/api').BulkUpdateResult>;
+  bulkDeleteTransactions: (ids: string[]) => Promise<import('../data/api').BulkDeleteResult>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -116,6 +120,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refetch();
     return summary;
   },
+  previewTransactionsCsv: (file) => api.previewTransactionsCsv(file),
+  importTransactionsMapped: async (file, mapping) => {
+    const summary = await api.importTransactionsCsvMapped(file, mapping);
+    await get().refetch();
+    return summary;
+  },
 
   refetch: async () => {
     const f = await loadFixtures();
@@ -174,5 +184,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().pushToast("Couldn't save deletion — changes reverted");
     }
     await get().refetch();
+  },
+  bulkUpdateTransactions: async (b) => {
+    const result = await api.bulkUpdateTransactions(b);
+    await get().refetch();
+    return result;
+  },
+  bulkDeleteTransactions: async (ids) => {
+    const result = await api.bulkDeleteTransactions(ids);
+    await get().refetch();
+    return result;
   },
 }));

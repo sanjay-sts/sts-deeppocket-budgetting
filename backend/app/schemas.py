@@ -131,3 +131,34 @@ class BudgetConfigPatch(BaseModel):
 
     mode: Optional[str] = None
     targetSavingsRate: Optional[float] = None
+
+
+class TransactionBulkUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str]
+    categoryId: Optional[str] = None
+    isTransfer: Optional[bool] = None
+    isDuplicate: Optional[bool] = None
+
+
+class TransactionBulkDelete(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str]
+
+
+class TransactionCsvMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dateColumn: str
+    merchantColumn: str
+    # amount: EITHER a single signed column, OR a debit/credit split — validated in the service.
+    amountColumn: Optional[str] = None
+    amountInvert: bool = False
+    debitColumn: Optional[str] = None
+    creditColumn: Optional[str] = None
+    # account: EITHER a column holding the account id, OR a fixed account id for every row.
+    accountColumn: Optional[str] = None
+    accountId: Optional[str] = None
+    dayFirst: bool = False
