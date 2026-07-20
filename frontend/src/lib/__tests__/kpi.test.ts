@@ -32,9 +32,9 @@ function fxBreakdown(): Fixtures {
     { id: 'cc1', name: 'Visa', kind: 'credit_card', institution: 'RBC', ownerIds: ['p1'], isLiability: true },
   ];
   const transactions: Transaction[] = [
-    { id: 't1', date: '2025-03-01', accountId: 'chq', rawMerchant: 'X', merchant: 'X', amount: 1000, categoryId: 'salary' },
+    { id: 't1', date: '2025-03-01', accountId: 'chq', rawMerchant: 'X', merchant: 'X', amount: 1000, categoryId: 'salary', source: 'bank' },
     // CC internal sum negative = balance owed
-    { id: 't2', date: '2025-03-05', accountId: 'cc1', rawMerchant: 'Y', merchant: 'Y', amount: -250, categoryId: 'groceries' },
+    { id: 't2', date: '2025-03-05', accountId: 'cc1', rawMerchant: 'Y', merchant: 'Y', amount: -250, categoryId: 'groceries', source: 'bank' },
   ];
   const f = fx([
     { date: '2025-03-31', accountId: 'tfsa1', amount: 5000 },
