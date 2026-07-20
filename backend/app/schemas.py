@@ -99,3 +99,17 @@ class CategoryPatch(BaseModel):
     group: Optional[str] = None
     bucket503020: Optional[str] = None  # "" clears
     isEssential: Optional[bool] = None
+
+
+class BudgetLineUpsert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    monthlyCap: float
+    rollover: bool = False
+
+
+class BudgetConfigPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[str] = None
+    targetSavingsRate: Optional[float] = None
