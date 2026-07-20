@@ -7,7 +7,7 @@ import { Tabs } from '../components/ui/Tabs';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { autoName } from '../lib/account';
-import type { BudgetMode } from '../types';
+import type { BudgetMode, CategoryGroup, Bucket503020 } from '../types';
 
 function HouseholdSection() {
   const household = useAppStore((s) => s.fixtures?.household ?? []);
@@ -424,6 +424,176 @@ const modeDescriptions: Record<BudgetMode, { title: string; text: string }> = {
   },
 };
 
+const CATEGORY_GROUPS: CategoryGroup[] = ['essentials', 'lifestyle', 'family', 'financial', 'transfers', 'income'];
+const BUCKETS: Bucket503020[] = ['needs', 'wants', 'savings'];
+
+function CategoriesSection() {
+  const fixtures = useAppStore((s) => s.fixtures)!;
+  const addCategory = useAppStore((s) => s.addCategory);
+  const editCategory = useAppStore((s) => s.editCategory);
+  const removeCategory = useAppStore((s) => s.removeCategory);
+
+  const inputClass = 'w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand';
+  const selectClass = 'w-full bg-bg-elev border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-brand';
+
+  const empty = { name: '', group: 'lifestyle' as CategoryGroup, bucket: '' as Bucket503020 | '', essential: false };
+  const [form, setForm] = useState(empty);
+  const [draft, setDraft] = useState(empty);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [lastCascade, setLastCascade] = useState('');
+  const pendingCategory = fixtures.categories.find((c) => c.id === pendingDelete) ?? null;
+
+  const sorted = [...fixtures.categories].sort(
+    (a, b) => CATEGORY_GROUPS.indexOf(a.group) - CATEGORY_GROUPS.indexOf(b.group) || a.name.localeCompare(b.name),
+  );
+
+  async function submit() {
+    setError('');
+    try {
+      await addCategory({
+        name: form.name, group: form.group,
+        bucket503020: form.bucket || undefined,
+        isEssential: form.essential || undefined,
+      });
+      setForm(empty);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function saveEdit(id: string) {
+    setError('');
+    try {
+      await editCategory(id, {
+        name: draft.name, group: draft.group,
+        bucket503020: draft.bucket, isEssential: draft.essential,
+      });
+      setEditingId(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div>
+      <table className="w-full text-sm mb-2 table-fixed">
+        <thead>
+          <tr className="text-left text-xs text-ink-dim uppercase tracking-wider">
+            <th className="py-1 pr-3 w-[30%]">Name</th>
+            <th className="py-1 pr-3 w-[20%]">Group</th>
+            <th className="py-1 pr-3 w-[18%]">50/30/20</th>
+            <th className="py-1 pr-3 w-[14%]">Essential</th>
+            <th className="w-[18%]"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {sorted.map((c) =>
+            c.id === 'unclassified' ? (
+              <tr key={c.id} className="border-t border-line">
+                <td className="py-1.5 pr-3 text-ink">{c.name}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{c.group}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{c.bucket503020 ?? '—'}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{c.isEssential ? 'yes' : '—'}</td>
+                <td className="text-right text-xs text-ink-dim">protected</td>
+              </tr>
+            ) : editingId === c.id ? (
+              <tr key={c.id} className="border-t border-line">
+                <td className="py-1.5 pr-3">
+                  <input className={inputClass} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                </td>
+                <td className="py-1.5 pr-3">
+                  <select className={selectClass} value={draft.group} onChange={(e) => setDraft({ ...draft, group: e.target.value as CategoryGroup })}>
+                    {CATEGORY_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </td>
+                <td className="py-1.5 pr-3">
+                  <select className={selectClass} value={draft.bucket} onChange={(e) => setDraft({ ...draft, bucket: e.target.value as Bucket503020 | '' })}>
+                    <option value="">—</option>
+                    {BUCKETS.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </td>
+                <td className="py-1.5 pr-3">
+                  <input type="checkbox" className="accent-brand" checked={draft.essential} onChange={(e) => setDraft({ ...draft, essential: e.target.checked })} />
+                </td>
+                <td className="text-right whitespace-nowrap">
+                  <Button onClick={() => saveEdit(c.id)} disabled={!draft.name.trim()}>Save</Button>
+                  <button className="text-ink-muted hover:text-ink ml-2" onClick={() => { setEditingId(null); setError(''); }}>Cancel</button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={c.id} className="border-t border-line">
+                <td className="py-1.5 pr-3 text-ink">{c.name}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{c.group}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{c.bucket503020 ?? '—'}</td>
+                <td className="py-1.5 pr-3 text-ink-muted">{c.isEssential ? 'yes' : '—'}</td>
+                <td className="text-right whitespace-nowrap">
+                  <button
+                    className="text-ink-muted hover:text-ink"
+                    onClick={() => {
+                      setDraft({ name: c.name, group: c.group, bucket: c.bucket503020 ?? '', essential: c.isEssential ?? false });
+                      setEditingId(c.id);
+                      setError('');
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button className="text-down ml-2" onClick={() => setPendingDelete(c.id)}>Delete</button>
+                </td>
+              </tr>
+            ),
+          )}
+          <tr className="border-t border-line">
+            <td className="pt-2 pr-3">
+              <input className={inputClass} placeholder="New category" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </td>
+            <td className="pt-2 pr-3">
+              <select className={selectClass} value={form.group} onChange={(e) => setForm({ ...form, group: e.target.value as CategoryGroup })}>
+                {CATEGORY_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </td>
+            <td className="pt-2 pr-3">
+              <select className={selectClass} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as Bucket503020 | '' })}>
+                <option value="">—</option>
+                {BUCKETS.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </td>
+            <td className="pt-2 pr-3">
+              <input type="checkbox" className="accent-brand" checked={form.essential} onChange={(e) => setForm({ ...form, essential: e.target.checked })} />
+            </td>
+            <td className="pt-2 text-right">
+              <Button onClick={() => void submit()} disabled={!form.name.trim()}>Add category</Button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {error && <p className="text-down text-sm mt-2">{error}</p>}
+      {lastCascade && <p className="text-xs text-ink-dim mt-2">{lastCascade}</p>}
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title={`Delete ${pendingCategory?.name ?? 'this category'}?`}
+        description="Its transactions move to “unclassified”; its budget line and any rules pointing at it are deleted."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          try {
+            const r = await removeCategory(pendingDelete);
+            setLastCascade(
+              `Deleted: ${r.transactionsReassigned} transactions → unclassified, ` +
+              `${r.rulesDeleted} rule${r.rulesDeleted === 1 ? '' : 's'} deleted` +
+              `${r.budgetLineDeleted ? ', budget line removed' : ''}.`,
+            );
+          } catch (e) {
+            setError((e as Error).message);
+          }
+          setPendingDelete(null);
+        }}
+      />
+    </div>
+  );
+}
+
 export function Settings() {
   const fixtures = useAppStore((s) => s.fixtures)!;
   const budgetMode = useAppStore((s) => s.budgetMode);
@@ -474,14 +644,8 @@ export function Settings() {
         </div>
       </Card>
 
-      <Card title="Categories" subtitle={`${fixtures.categories.length} categories`}>
-        <div className="flex flex-wrap gap-2">
-          {fixtures.categories.map((c) => (
-            <span key={c.id} className="text-xs px-2 py-1 rounded bg-bg-elev border border-line text-ink-muted">
-              {c.name}
-            </span>
-          ))}
-        </div>
+      <Card title="Categories" subtitle={`${fixtures.categories.length} categories — used by transactions, budgets, and rules`}>
+        <CategoriesSection />
       </Card>
 
       <Card title="Categorization rules" subtitle="keyword → category, applied to CSV imports (newest rule wins)">
