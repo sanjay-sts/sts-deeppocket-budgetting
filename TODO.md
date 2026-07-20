@@ -10,8 +10,8 @@ Check the box here (and commit it) when a task lands.
 
 - [x] Task 1: Schema — `Transaction.source`, merchant index, `cash` kind, Cash wallet seed (`c3a6a60`)
 - [x] Task 2: Categories router — POST / PATCH / DELETE with cascade (`928ca9a`)
-- [ ] Task 3: Budget router — line upsert/delete, config patch
-- [ ] Task 4: Transactions — POST (manual), DELETE, PATCH extension for manual facts
+- [x] Task 3: Budget router — line upsert/delete, config patch (`f660d36`)
+- [x] Task 4: Transactions — POST (manual), DELETE, PATCH extension for manual facts (`99eded7`)
 - [ ] Task 5: Frontend types, seam methods, and `cash`-kind plumbing
 - [ ] Task 6: Toast slice, ToastHost, store actions + retrofit
 - [ ] Task 7: Settings — Categories card (CRUD UI)
