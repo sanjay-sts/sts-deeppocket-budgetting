@@ -18,6 +18,15 @@ unclassified (rules CRUD at `/api/rules`, managed in a Settings "Categorization 
 card, with a create-rule prompt after reclassify on the Transactions page). See
 `docs/superpowers/specs/2026-07-16-m3-editable-transactions-design.md`.
 
+**In progress: Milestone 4** (branch `m4-editable-categories-budgets`) — editable
+categories/budgets and manual cash entry. Spec:
+`docs/superpowers/specs/2026-07-17-m4-editable-categories-budgets-design.md`; plan (11 tasks):
+`docs/superpowers/plans/2026-07-17-m4-editable-categories-budgets.md`. Done: Task 1
+(`Transaction.source` + merchant index, `cash` kind, seeded `cash_wallet` account) and
+Task 2 (category CRUD at `/api/categories` with cascade delete to `unclassified`).
+**Next: Task 3** — budget router (`PUT/DELETE /api/budget/lines/{categoryId}`,
+`PATCH /api/budget/config`).
+
 ## Layout
 
 ```
@@ -102,7 +111,7 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
 ## Known gaps (tracked on the GitHub project board)
 
 - `date-fns` is declared in `package.json` but currently unused.
-- Categories & budgets are in the DB but not yet editable (candidate M4).
+- Categories & budgets are in the DB but not yet editable — being built now in M4 (see "In progress" above).
 
 ## Working here
 
