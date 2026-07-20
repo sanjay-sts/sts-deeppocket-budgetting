@@ -19,6 +19,7 @@ export type AccountKind =
   | 'chequing'
   | 'savings'
   | 'credit_card'
+  | 'cash'
   | 'tfsa'
   | 'rrsp'
   | 'resp'
@@ -57,6 +58,8 @@ export interface Category {
   isEssential?: boolean;
 }
 
+export type TransactionSource = 'bank' | 'manual';
+
 export interface Transaction {
   id: string;
   date: IsoDate;
@@ -65,6 +68,7 @@ export interface Transaction {
   merchant: string;
   amount: number;
   categoryId: CategoryId;
+  source: TransactionSource; // 'bank': imported, facts immutable; 'manual': user-entered, fully editable
   personId?: PersonId | null;
   isTransfer?: boolean;
   isDuplicate?: boolean;

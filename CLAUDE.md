@@ -8,15 +8,22 @@ A single-household budgeting and net-worth tracker for a Canadian family (two ad
 It models Canadian registered accounts (TFSA / RRSP / RESP / FHSA), contribution room against
 CRA limits, and RESP → CESG grant tracking.
 
-**Current state:** Milestone 3 shipped — the entire `/api/data` payload is now DB-backed
-(the fixtures file is seed input only). Transactions are editable (category, transfer/
-duplicate flags, notes, tags via `PATCH`; bank facts like amount/date/merchant stay
-immutable). Bank and credit-card CSV import ships with header auto-detection and
-idempotent dedup (`POST /api/import/transactions-csv`, UI card on the Import page next to
-the investments card). Auto-categorization runs history → user-editable rules →
-unclassified (rules CRUD at `/api/rules`, managed in a Settings "Categorization rules"
-card, with a create-rule prompt after reclassify on the Transactions page). See
-`docs/superpowers/specs/2026-07-16-m3-editable-transactions-design.md`.
+**Current state:** Milestone 4 shipped. The entire `/api/data` payload is DB-backed (the
+fixtures file is seed input only). Transactions are editable (category, transfer/duplicate
+flags, notes, tags via `PATCH`); bank-imported facts (amount/date/merchant/account) stay
+immutable, but **manual** transactions are fully editable and deletable — cash and missed
+entries are added on the Transactions page (`POST`/`DELETE /api/transactions`, into the
+seeded Cash wallet account) and carry a `manual` badge. Bank and credit-card CSV import
+ships with header auto-detection and idempotent dedup (`POST /api/import/transactions-csv`,
+UI card on the Import page). Auto-categorization runs history → user-editable rules →
+unclassified (rules CRUD at `/api/rules`, managed in a Settings card with inline keyword
+editing and a create-rule prompt after reclassify). **Categories** are CRUD-editable
+(`/api/categories`, Settings "Categories" card; deleting one cascades its transactions to
+`unclassified` and removes its budget line + pointing rules). **Budgets** are editable
+(`/api/budget` — inline caps, persisted rollover, add/remove lines on the Budgets page;
+budget mode persists). Failed optimistic writes toast and revert (global `ToastHost`). Specs:
+`docs/superpowers/specs/2026-07-16-m3-editable-transactions-design.md`,
+`docs/superpowers/specs/2026-07-17-m4-editable-categories-budgets-design.md`.
 
 ## Layout
 
@@ -102,7 +109,8 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
 ## Known gaps (tracked on the GitHub project board)
 
 - `date-fns` is declared in `package.json` but currently unused.
-- Categories & budgets are in the DB but not yet editable (candidate M4).
+- Manual transaction entry covers cash/missed rows; bulk transaction CRUD and a
+  configurable per-bank import mapping wizard remain future candidates.
 
 ## Working here
 

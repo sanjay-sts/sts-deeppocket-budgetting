@@ -36,6 +36,16 @@ interface AppState {
   removeContribution: (id: string) => Promise<void>;
   importCsv: (file: File) => Promise<import('../data/api').ImportSummary>;
   purgeData: (mode: PurgeMode) => Promise<void>;
+  toasts: { id: string; message: string }[];
+  pushToast: (message: string) => void;
+  dismissToast: (id: string) => void;
+  addCategory: (b: import('../data/api').CategoryInput) => Promise<void>;
+  editCategory: (id: string, b: import('../data/api').CategoryPatchInput) => Promise<void>;
+  removeCategory: (id: string) => Promise<import('../data/api').CategoryDeleteResult>;
+  saveBudgetLine: (categoryId: string, b: { monthlyCap: number; rollover: boolean }) => Promise<void>;
+  removeBudgetLine: (categoryId: string) => Promise<void>;
+  addTransaction: (b: import('../data/api').TransactionCreateInput) => Promise<void>;
+  removeTransaction: (id: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -57,7 +67,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setSelectedMonth: (ym) => set({ selectedMonth: ym }),
-  setBudgetMode: (mode) => set({ budgetMode: mode }),
+  setBudgetMode: (mode) => {
+    const prev = get().budgetMode;
+    set({ budgetMode: mode });
+    void api.updateBudgetConfig({ mode }).catch(() => {
+      set({ budgetMode: prev });
+      get().pushToast("Couldn't save budget mode — changes reverted");
+    });
+  },
+
+  toasts: [],
+  pushToast: (message) =>
+    set((s) => ({ toasts: [...s.toasts, { id: `toast_${Date.now()}_${s.toasts.length}`, message }] })),
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   reclassifyTransaction: async (txId, categoryId) => {
     const f = get().fixtures;
@@ -69,12 +91,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ fixtures: { ...f, transactions: txs } });
     try {
       await api.updateTransaction(txId, { categoryId });
+    } catch {
+      get().pushToast("Couldn't save category — changes reverted");
     } finally {
       await get().refetch(); // success: confirm; failure: revert to server truth
     }
   },
 
-  editTransaction: async (id, b) => { await api.updateTransaction(id, b); await get().refetch(); },
+  editTransaction: async (id, b) => {
+    try {
+      await api.updateTransaction(id, b);
+    } catch {
+      get().pushToast("Couldn't save transaction — changes reverted");
+    }
+    await get().refetch();
+  },
 
   loadRules: async () => { set({ rules: await api.listRules() }); },
   addRule: async (b) => { await api.createRule(b); await get().loadRules(); },
@@ -108,4 +139,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     return summary;
   },
   purgeData: async (mode) => { await api.purge(mode); await get().refetch(); },
+
+  addCategory: async (b) => { await api.createCategory(b); await get().refetch(); },
+  editCategory: async (id, b) => { await api.updateCategory(id, b); await get().refetch(); },
+  removeCategory: async (id) => {
+    const result = await api.deleteCategory(id);
+    await get().refetch();
+    await get().loadRules(); // cascade may have deleted rules
+    return result;
+  },
+  saveBudgetLine: async (categoryId, b) => {
+    try {
+      await api.upsertBudgetLine(categoryId, b);
+    } catch {
+      get().pushToast("Couldn't save budget line — changes reverted");
+    }
+    await get().refetch();
+  },
+  removeBudgetLine: async (categoryId) => {
+    try {
+      await api.deleteBudgetLine(categoryId);
+    } catch {
+      get().pushToast("Couldn't save budget line — changes reverted");
+    }
+    await get().refetch();
+  },
+  addTransaction: async (b) => { await api.createTransaction(b); await get().refetch(); },
+  removeTransaction: async (id) => {
+    const f = get().fixtures;
+    if (f) set({ fixtures: { ...f, transactions: f.transactions.filter((t) => t.id !== id) } });
+    try {
+      await api.deleteTransaction(id);
+    } catch {
+      get().pushToast("Couldn't save deletion — changes reverted");
+    }
+    await get().refetch();
+  },
 }));

@@ -62,8 +62,9 @@ class ContributionUpdate(BaseModel):
 
 
 class TransactionPatch(BaseModel):
-    # Bank facts (date/amount/merchant/account) are immutable: extra="forbid" turns any
-    # attempt to write them into a 422 instead of a silent ignore.
+    # Bank facts (date/amount/merchant/account) are immutable on source='bank' rows —
+    # the router rejects them with 422. On source='manual' rows they are editable.
+    # extra="forbid" still turns unknown fields into a 422 instead of a silent ignore.
     model_config = ConfigDict(extra="forbid")
 
     categoryId: Optional[str] = None
@@ -71,6 +72,23 @@ class TransactionPatch(BaseModel):
     isDuplicate: Optional[bool] = None
     notes: Optional[str] = None      # "" clears
     tags: Optional[list[str]] = None  # [] clears
+    # manual-only bank facts:
+    date: Optional[str] = None
+    merchant: Optional[str] = None
+    amount: Optional[float] = None
+    accountId: Optional[str] = None
+
+
+class TransactionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accountId: str
+    date: str
+    merchant: str
+    amount: float
+    categoryId: Optional[str] = None  # omitted -> auto-categorize
+    notes: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class RuleCreate(BaseModel):
@@ -81,3 +99,35 @@ class RuleCreate(BaseModel):
 class RuleUpdate(BaseModel):
     keyword: Optional[str] = None
     categoryId: Optional[str] = None
+
+
+class CategoryCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    group: str
+    bucket503020: Optional[str] = None
+    isEssential: bool = False
+
+
+class CategoryPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = None
+    group: Optional[str] = None
+    bucket503020: Optional[str] = None  # "" clears
+    isEssential: Optional[bool] = None
+
+
+class BudgetLineUpsert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    monthlyCap: float
+    rollover: bool = False
+
+
+class BudgetConfigPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[str] = None
+    targetSavingsRate: Optional[float] = None
