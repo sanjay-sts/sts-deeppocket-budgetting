@@ -95,6 +95,15 @@ export interface ContributionEvent {
   beneficiaryId?: PersonId;
 }
 
+// CRA-stated available room (NOA / MyAccount) incl. carry-forward — issue #25.
+export type StatedRoomKind = 'tfsa' | 'rrsp' | 'fhsa';
+
+export interface StatedRoom {
+  personId: PersonId;
+  kind: StatedRoomKind;
+  amount: number;
+}
+
 export interface CesgGrant {
   id: string;
   date: IsoDate;
@@ -145,6 +154,7 @@ export interface Fixtures {
   transactions: Transaction[];
   investments: InvestmentSnapshot[];
   contributionEvents: ContributionEvent[];
+  statedRoom?: StatedRoom[];
   cesgGrants: CesgGrant[];
   budget: Budget;
   craLimits: CraLimits;

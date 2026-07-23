@@ -45,6 +45,12 @@ class SnapshotUpdate(BaseModel):
     amount: Optional[float] = None
 
 
+class StatedRoomUpsert(BaseModel):
+    personId: str
+    kind: str
+    amount: float
+
+
 class ContributionCreate(BaseModel):
     accountId: str
     personId: str
