@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { netWorth, netWorthByKind, latestInvestmentSnapshot, round2 } from '../kpi';
+import { accountReturns, netWorth, netWorthByKind, latestInvestmentSnapshot, round2 } from '../kpi';
 import type { Account, Fixtures, InvestmentSnapshot, Transaction } from '../../types';
 
 const LIMITS = {
@@ -66,6 +66,58 @@ describe('netWorthByKind', () => {
     const cc = netWorthByKind(fxBreakdown()).find((r) => r.kind === 'credit_card');
     expect(cc!.value).toBe(-250);
     expect(cc!.label).toBe('Credit card debt');
+  });
+});
+
+// Horizon returns for the Investments accounts table (issue #20).
+describe('accountReturns', () => {
+  const snaps: InvestmentSnapshot[] = [
+    { date: '2021-06-30', accountId: 'inv1', amount: 50 },
+    { date: '2023-06-30', accountId: 'inv1', amount: 100 },
+    { date: '2025-06-30', accountId: 'inv1', amount: 150 },
+    { date: '2025-12-31', accountId: 'inv1', amount: 160 },
+    { date: '2026-06-30', accountId: 'inv1', amount: 200 },
+    // Noise from another account — must be ignored.
+    { date: '2026-06-30', accountId: 'other', amount: 9999 },
+  ];
+
+  it('YTD is the change since the last snapshot of the prior calendar year', () => {
+    expect(accountReturns(snaps, 'inv1').ytd).toBeCloseTo(200 / 160 - 1, 6);
+  });
+
+  it('YoY is the change vs the snapshot 12 months before the latest', () => {
+    expect(accountReturns(snaps, 'inv1').yoy).toBeCloseTo(200 / 150 - 1, 6);
+  });
+
+  it('3yr and 5yr are annualized (CAGR) over the actual elapsed period', () => {
+    const r = accountReturns(snaps, 'inv1');
+    expect(r.yr3).toBeCloseTo(Math.pow(200 / 100, 1 / 3) - 1, 6); // 2021→doubling over 3 yrs
+    expect(r.yr5).toBeCloseTo(Math.pow(200 / 50, 1 / 5) - 1, 6);
+  });
+
+  it('annualizes over the real gap when no snapshot sits exactly at the horizon', () => {
+    const sparse: InvestmentSnapshot[] = [
+      { date: '2023-03-31', accountId: 'inv1', amount: 100 }, // 39 months before as-of
+      { date: '2026-06-30', accountId: 'inv1', amount: 200 },
+    ];
+    expect(accountReturns(sparse, 'inv1').yr3).toBeCloseTo(Math.pow(2, 12 / 39) - 1, 6);
+  });
+
+  it('returns null for horizons with insufficient history', () => {
+    const young: InvestmentSnapshot[] = [
+      { date: '2026-01-31', accountId: 'inv1', amount: 100 },
+      { date: '2026-06-30', accountId: 'inv1', amount: 110 },
+    ];
+    expect(accountReturns(young, 'inv1')).toEqual({ ytd: null, yoy: null, yr3: null, yr5: null });
+  });
+
+  it('returns null across the board for an account with no snapshots or a zero baseline', () => {
+    expect(accountReturns(snaps, 'missing')).toEqual({ ytd: null, yoy: null, yr3: null, yr5: null });
+    const zeroBase: InvestmentSnapshot[] = [
+      { date: '2025-12-31', accountId: 'inv1', amount: 0 },
+      { date: '2026-06-30', accountId: 'inv1', amount: 100 },
+    ];
+    expect(accountReturns(zeroBase, 'inv1').ytd).toBeNull();
   });
 });
 
