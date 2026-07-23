@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { contributionRoomUsed, cesgStatusPerKid } from '../canadian';
-import type { CraLimits, ContributionEvent, CesgGrant } from '../../types';
+import { contributionRoomUsed, cesgStatusPerKid, rrspRefundOpportunities } from '../canadian';
+import type { CraLimits, ContributionEvent, CesgGrant, Person } from '../../types';
 
 const LIMITS: CraLimits = {
   TFSA_ANNUAL: 7000, RRSP_ANNUAL_PCT: 0.18, RRSP_ANNUAL_CAP: 32490,
@@ -25,6 +25,52 @@ describe('contributionRoomUsed', () => {
       { id: 'c1', date: '2024-12-31', accountId: 'a', personId: 'p1', amount: 3000, kind: 'tfsa' },
     ];
     expect(contributionRoomUsed(events, 2025, LIMITS, {})).toHaveLength(0);
+  });
+});
+
+// RRSP refund card must derive from real household records, not mock ids (issue #22).
+describe('rrspRefundOpportunities', () => {
+  // Generated ids like the CSV importer creates — the original bug hardcoded 'sanjay'.
+  const household: Person[] = [
+    { id: 'p_2ee08097', name: 'sanjay', role: 'adult' },
+    { id: 'p_fa0430a4', name: 'anumol', role: 'adult' },
+    { id: 'p_kid', name: 'mira', role: 'child' },
+  ];
+
+  it('gives every adult full room when no contributions are recorded', () => {
+    const out = rrspRefundOpportunities(household, [], 2026, LIMITS, 100000);
+    expect(out.map((o) => o.personId)).toEqual(['p_2ee08097', 'p_fa0430a4']);
+    // 18% of 100k, under the cap; marginal 29.65% for that bracket.
+    expect(out[0].remaining).toBe(18000);
+    expect(out[0].marginalRate).toBeCloseTo(0.2965, 6);
+    expect(out[0].refund).toBeCloseTo(18000 * 0.2965, 6);
+  });
+
+  it('subtracts this year\'s RRSP contributions and ignores other years/kinds/people', () => {
+    const events: ContributionEvent[] = [
+      { id: 'c1', date: '2026-03-01', accountId: 'a', personId: 'p_2ee08097', amount: 5000, kind: 'rrsp' },
+      { id: 'c2', date: '2025-03-01', accountId: 'a', personId: 'p_2ee08097', amount: 9000, kind: 'rrsp' },
+      { id: 'c3', date: '2026-03-01', accountId: 'a', personId: 'p_2ee08097', amount: 2000, kind: 'tfsa' },
+      { id: 'c4', date: '2026-03-01', accountId: 'a', personId: 'p_fa0430a4', amount: 1000, kind: 'rrsp' },
+    ];
+    const out = rrspRefundOpportunities(household, events, 2026, LIMITS, 100000);
+    expect(out.find((o) => o.personId === 'p_2ee08097')!.remaining).toBe(13000);
+    expect(out.find((o) => o.personId === 'p_fa0430a4')!.remaining).toBe(17000);
+  });
+
+  it('excludes children and never returns negative room', () => {
+    const events: ContributionEvent[] = [
+      { id: 'c1', date: '2026-03-01', accountId: 'a', personId: 'p_2ee08097', amount: 99999, kind: 'rrsp' },
+    ];
+    const out = rrspRefundOpportunities(household, events, 2026, LIMITS, 100000);
+    expect(out.some((o) => o.personId === 'p_kid')).toBe(false);
+    expect(out.find((o) => o.personId === 'p_2ee08097')!.remaining).toBe(0);
+  });
+
+  it('caps the annual limit at RRSP_ANNUAL_CAP for high incomes', () => {
+    const out = rrspRefundOpportunities(household.slice(0, 1), [], 2026, LIMITS, 300000);
+    expect(out[0].remaining).toBe(32490); // 18% of 300k would be 54k
+    expect(out[0].marginalRate).toBeCloseTo(0.5353, 6);
   });
 });
 
