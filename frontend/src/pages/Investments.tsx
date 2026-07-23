@@ -20,7 +20,7 @@ import { MoneyCell } from '../components/shared/MoneyCell';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { monthKey } from '../lib/format';
 import { listSnapshots, type SnapshotRow } from '../data/api';
-import type { AccountKind, ContributionKind } from '../types';
+import type { AccountKind, ContributionKind, StatedRoomKind } from '../types';
 
 const KIND_COLORS: Record<AccountKind, string> = {
   chequing: '#64748b',
@@ -105,11 +105,13 @@ export function Investments() {
   // so every adult uses the same assumed income for RRSP limits.
   const currentYear = Number(lastSnapYm.slice(0, 4));
   const adults = fixtures.household.filter((p) => p.role === 'adult');
+  const statedRoom = fixtures.statedRoom ?? [];
   const room = contributionRoomUsed(
     fixtures.contributionEvents,
     currentYear,
     limits,
     Object.fromEntries(adults.map((p) => [p.id, ASSUMED_ADULT_INCOME])),
+    statedRoom,
   );
 
   const kidIds = fixtures.household.filter((p) => p.role === 'child').map((p) => p.id);
@@ -122,7 +124,9 @@ export function Investments() {
   );
 
   // Tax hints
-  const rrspOpps = rrspRefundOpportunities(fixtures.household, fixtures.contributionEvents, currentYear, limits);
+  const rrspOpps = rrspRefundOpportunities(
+    fixtures.household, fixtures.contributionEvents, currentYear, limits, ASSUMED_ADULT_INCOME, statedRoom,
+  );
   const rrspRoomLeft = rrspOpps.reduce((a, o) => a + o.remaining, 0);
   const projectedRrspRefund = rrspOpps.reduce((a, o) => a + o.refund, 0);
   const marginalRate = rrspOpps[0]?.marginalRate ?? 0;
@@ -265,6 +269,13 @@ export function Investments() {
             );
           })}
         </div>
+        {room.length === 0 && (
+          <p className="text-sm text-ink-dim">
+            Nothing to show yet — record contributions in the form at the bottom of this page,
+            or set your CRA-stated room below to see available room right away.
+          </p>
+        )}
+        <StatedRoomEditor />
       </Card>
 
       {/* CESG per kid */}
@@ -320,6 +331,62 @@ export function Investments() {
 }
 
 const CONTRIBUTION_KINDS_LIST: ContributionKind[] = ['rrsp', 'tfsa', 'resp', 'fhsa'];
+
+// CRA-stated (carry-forward) room per adult — issue #25. The stated amount replaces the
+// flat annual limit on the room tiles above and in the RRSP refund card.
+const STATED_KINDS: StatedRoomKind[] = ['tfsa', 'rrsp', 'fhsa'];
+
+function StatedRoomEditor() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const saveStatedRoom = useAppStore((s) => s.saveStatedRoom);
+  const removeStatedRoom = useAppStore((s) => s.removeStatedRoom);
+  const adults = (fixtures?.household ?? []).filter((p) => p.role === 'adult');
+  const personById = new Map((fixtures?.household ?? []).map((p) => [p.id, p]));
+  const stated = fixtures?.statedRoom ?? [];
+  const [f, setF] = useState({ personId: '', kind: 'tfsa' as StatedRoomKind, amount: '' });
+  const [error, setError] = useState('');
+
+  async function submit() {
+    setError('');
+    try {
+      await saveStatedRoom({ personId: f.personId, kind: f.kind, amount: Number(f.amount) });
+      setF({ ...f, amount: '' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-line">
+      <div className="text-xs text-ink-dim uppercase tracking-wider mb-2">
+        CRA-stated room · from your Notice of Assessment / CRA MyAccount (includes carry-forward)
+      </div>
+      <div className="flex gap-2 items-end flex-wrap mb-2">
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
+          <option value="">Person…</option>
+          {adults.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as StatedRoomKind })}>
+          {STATED_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Room $" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <Button onClick={submit} disabled={!f.personId || !f.amount || Number.isNaN(Number(f.amount))}>Save</Button>
+      </div>
+      {error && <p className="text-down text-sm mb-2">{error}</p>}
+      {stated.length > 0 && (
+        <div className="flex gap-2 flex-wrap text-sm">
+          {stated.map((s) => (
+            <span key={`${s.personId}-${s.kind}`} className="inline-flex items-center gap-2 bg-bg-elev border border-line rounded-md px-2 py-1 text-ink-muted">
+              {personById.get(s.personId)?.name ?? s.personId} · {s.kind.toUpperCase()} ·{' '}
+              <span className="num text-ink">{cad(s.amount, true)}</span>
+              <button className="text-down" onClick={() => removeStatedRoom(s.personId, s.kind)}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ContributionsEditor() {
   const fixtures = useAppStore((s) => s.fixtures);

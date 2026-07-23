@@ -36,6 +36,8 @@ interface AppState {
   addContribution: (b: { accountId: string; personId: string; date: string; amount: number; kind: import('../types').ContributionKind; beneficiaryId?: string }) => Promise<void>;
   editContribution: (id: string, b: Record<string, unknown>) => Promise<void>;
   removeContribution: (id: string) => Promise<void>;
+  saveStatedRoom: (b: import('../types').StatedRoom) => Promise<void>;
+  removeStatedRoom: (personId: string, kind: import('../types').StatedRoomKind) => Promise<void>;
   importCsv: (file: File) => Promise<import('../data/api').ImportSummary>;
   purgeData: (mode: PurgeMode) => Promise<void>;
   toasts: { id: string; message: string }[];
@@ -143,6 +145,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   addContribution: async (b) => { await api.createContribution(b); await get().refetch(); },
   editContribution: async (id, b) => { await api.updateContribution(id, b as never); await get().refetch(); },
   removeContribution: async (id) => { await api.deleteContribution(id); await get().refetch(); },
+  saveStatedRoom: async (b) => { await api.upsertStatedRoom(b); await get().refetch(); },
+  removeStatedRoom: async (personId, kind) => { await api.deleteStatedRoom(personId, kind); await get().refetch(); },
   importCsv: async (file) => {
     const summary = await api.importInvestmentsCsv(file);
     await get().refetch();

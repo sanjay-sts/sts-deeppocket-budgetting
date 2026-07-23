@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from ..constants import BANK_KINDS, CRA_LIMITS_2025
 from ..models import (
     Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
-    Category, Transaction, BudgetLine, BudgetConfig, AppMeta,
+    StatedRoom, Category, Transaction, BudgetLine, BudgetConfig, AppMeta,
 )
 from .cesg import derive_cesg_grants
 
@@ -54,6 +54,10 @@ def _contribution_out(c: Contribution) -> dict:
     if c.beneficiary_person_id:
         out["beneficiaryId"] = c.beneficiary_person_id
     return out
+
+
+def _stated_room_out(r: StatedRoom) -> dict:
+    return {"personId": r.person_id, "kind": r.kind, "amount": r.amount}
 
 
 def _category_out(c: Category) -> dict:
@@ -142,6 +146,7 @@ def build_payload(session: Session) -> dict:
             for s in snapshots
         ],
         "contributionEvents": [_contribution_out(c) for c in contributions],
+        "statedRoom": [_stated_room_out(r) for r in session.exec(select(StatedRoom)).all()],
         "cesgGrants": grants,
         "budget": budget,
         "craLimits": CRA_LIMITS_2025,

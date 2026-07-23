@@ -103,6 +103,13 @@ interface ContributionInput {
   amount: number; kind: ContributionKind; beneficiaryId?: string;
 }
 
+import type { StatedRoom, StatedRoomKind } from '../types';
+
+// CRA-stated (carry-forward) contribution room per person — issue #25.
+export const upsertStatedRoom = (b: StatedRoom) => send<StatedRoom>('PUT', '/api/room', b);
+export const deleteStatedRoom = (personId: string, kind: StatedRoomKind) =>
+  send<void>('DELETE', `/api/room/${personId}/${kind}`);
+
 export const createContribution = (b: ContributionInput) =>
   send<ContributionEvent>('POST', '/api/contributions', b);
 export const updateContribution = (id: string, b: Partial<ContributionInput>) =>
