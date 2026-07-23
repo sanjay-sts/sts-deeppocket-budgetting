@@ -3,7 +3,7 @@ import io
 
 from sqlmodel import Session, select
 
-from ..constants import new_id, normalize_date
+from ..constants import new_id, normalize_date, parse_amount
 from ..models import Account, Category, Transaction
 from .categorize import categorize
 
@@ -23,11 +23,6 @@ def _parse_amount(row: dict, neg_col: str, pos_col: str) -> float:
     if bool(neg) == bool(pos):
         raise ValueError(f"exactly one of {neg_col}/{pos_col} must have an amount")
     return -float(neg) if neg else float(pos)
-
-
-def _num(s: str) -> float:
-    # Tolerate thousands separators and a leading currency symbol.
-    return float(s.replace(",", "").replace("$", "").strip())
 
 
 def _new_summary() -> dict:
@@ -196,7 +191,7 @@ def import_transactions_csv_mapped(text: str, mapping, session: Session) -> dict
                 val = row.get(mapping.amountColumn, "")
                 if val == "":
                     raise ValueError(f"missing {mapping.amountColumn}")
-                amount = _num(val)
+                amount = parse_amount(val)
                 if mapping.amountInvert:
                     amount = -amount
             else:
@@ -204,7 +199,7 @@ def import_transactions_csv_mapped(text: str, mapping, session: Session) -> dict
                 credit = row.get(mapping.creditColumn, "") if mapping.creditColumn else ""
                 if bool(debit) == bool(credit):
                     raise ValueError("exactly one of the debit/credit columns must have a value")
-                amount = -_num(debit) if debit else _num(credit)
+                amount = -parse_amount(debit) if debit else parse_amount(credit)
             account_id = mapping.accountId if mapping.accountId else row.get(mapping.accountColumn, "")
             if not session.get(Account, account_id):
                 raise ValueError(f"unknown account: {account_id!r} (must match an existing account id)")

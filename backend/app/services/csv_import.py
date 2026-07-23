@@ -3,7 +3,7 @@ import io
 
 from sqlmodel import Session, select
 
-from ..constants import normalize_date, normalize_kind, new_id
+from ..constants import normalize_date, normalize_kind, new_id, parse_amount
 from ..models import Person, Account, AccountOwner, InvestmentSnapshot
 
 REQUIRED = {"date", "person", "institution", "account_type", "amount"}
@@ -50,7 +50,7 @@ def import_investment_csv(text: str, session: Session) -> dict:
         row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw.items()}
         try:
             date = normalize_date(row["date"])
-            amount = float(row["amount"])
+            amount = parse_amount(row["amount"])
             name, institution, account_type = row["person"], row["institution"], row["account_type"]
             if not (name and institution and account_type):
                 raise ValueError("missing person/institution/account_type")

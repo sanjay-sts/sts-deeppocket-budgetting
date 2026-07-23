@@ -36,6 +36,15 @@ def test_import_infers_kind_from_free_text_type(session):
     assert acc.account_type == "dccp2" and acc.kind == "dcpp"
 
 
+def test_import_parses_currency_formatted_amounts(session):
+    csv_text = HEADER + '20250131,sanjay,questrade,tfsa,"189,301.43"\n20250131,anumol,rbc,rrsp,"$1,234.56"\n'
+    summary = import_investment_csv(csv_text, session)
+    assert summary["created"] == 2
+    assert summary["skipped"] == 0
+    amounts = sorted(s.amount for s in session.exec(select(InvestmentSnapshot)).all())
+    assert amounts == [1234.56, 189301.43]
+
+
 def test_import_reports_bad_rows(session):
     summary = import_investment_csv(HEADER + "BADDATE,sanjay,questrade,tfsa,100\n", session)
     assert summary["skipped"] == 1
