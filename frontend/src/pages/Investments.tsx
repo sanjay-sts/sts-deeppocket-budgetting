@@ -369,7 +369,7 @@ function StatedRoomEditor() {
         <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as StatedRoomKind })}>
           {STATED_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
         </select>
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Room $" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <input type="number" step="0.01" min="0" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Room $" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         <Button onClick={submit} disabled={!f.personId || !f.amount || Number.isNaN(Number(f.amount))}>Save</Button>
       </div>
       {error && <p className="text-down text-sm mb-2">{error}</p>}
@@ -435,8 +435,8 @@ export function ContributionsEditor() {
             {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
         )}
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <input type="date" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand [color-scheme:dark]" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <input type="number" step="0.01" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         <Button onClick={submit} disabled={!f.personId || !f.accountId || !f.date || !f.amount || (f.kind === 'resp' && !f.beneficiaryId)}>Add</Button>
       </div>
       {error && <p className="text-down text-sm mb-2">{error}</p>}
@@ -517,8 +517,8 @@ export function SnapshotEditor() {
           <option value="">Account…</option>
           {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Date (YYYY-MM-DD)" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input type="date" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand [color-scheme:dark]" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input type="number" step="0.01" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <Button onClick={submit} disabled={!accountId || !date || !amount}>Save</Button>
       </div>
       {error && <p className="text-down text-sm mb-2">{error}</p>}
