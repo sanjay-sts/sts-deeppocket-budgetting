@@ -14,6 +14,6 @@ def test_get_data_returns_fixture_shape(client, engine):
     assert resp.status_code == 200
     payload = resp.json()
     base = json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
-    assert set(payload.keys()) == set(base.keys())
+    assert set(payload.keys()) == set(base.keys()) | {"statedRoom"}
     assert len(payload["household"]) >= 1
     assert len(payload["accounts"]) >= 1

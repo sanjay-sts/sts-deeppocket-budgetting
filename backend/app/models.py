@@ -59,6 +59,18 @@ class Contribution(SQLModel, table=True):
     beneficiary_person_id: Optional[str] = Field(default=None, foreign_key="person.id")
 
 
+class StatedRoom(SQLModel, table=True):
+    # CRA-stated available contribution room (NOA / CRA MyAccount) — includes
+    # carry-forward, so it replaces the flat annual limit on the room card (issue #25).
+    __table_args__ = (
+        UniqueConstraint("person_id", "kind", name="uq_statedroom_person_kind"),
+    )
+    id: str = Field(primary_key=True)
+    person_id: str = Field(foreign_key="person.id", index=True)
+    kind: str                  # 'tfsa' | 'rrsp' | 'fhsa'
+    amount: float
+
+
 class Category(SQLModel, table=True):
     id: str = Field(primary_key=True)
     name: str
