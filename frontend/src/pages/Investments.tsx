@@ -15,7 +15,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Progress } from '../components/ui/Progress';
 import { cad, cadK, pct } from '../lib/format';
-import { contributionRoomUsed, cesgStatusPerKid, estimateMarginalRate } from '../lib/canadian';
+import { contributionRoomUsed, cesgStatusPerKid, rrspRefundOpportunities, ASSUMED_ADULT_INCOME } from '../lib/canadian';
 import { MoneyCell } from '../components/shared/MoneyCell';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { monthKey } from '../lib/format';
@@ -101,13 +101,15 @@ export function Investments() {
     value: Math.round(value),
   }));
 
-  // Contribution room
+  // Contribution room — incomes aren't stored on household members yet (issue #23),
+  // so every adult uses the same assumed income for RRSP limits.
   const currentYear = Number(lastSnapYm.slice(0, 4));
+  const adults = fixtures.household.filter((p) => p.role === 'adult');
   const room = contributionRoomUsed(
     fixtures.contributionEvents,
     currentYear,
     limits,
-    { sanjay: 115000, anumol: 65000 },
+    Object.fromEntries(adults.map((p) => [p.id, ASSUMED_ADULT_INCOME])),
   );
 
   const kidIds = fixtures.household.filter((p) => p.role === 'child').map((p) => p.id);
@@ -120,11 +122,10 @@ export function Investments() {
   );
 
   // Tax hints
-  const rrspSanjay = room.find((r) => r.kind === 'rrsp' && r.personId === 'sanjay');
-  const marginalSanjay = estimateMarginalRate(115000);
-  const projectedRrspRefund = rrspSanjay
-    ? rrspSanjay.remaining * marginalSanjay
-    : 0;
+  const rrspOpps = rrspRefundOpportunities(fixtures.household, fixtures.contributionEvents, currentYear, limits);
+  const rrspRoomLeft = rrspOpps.reduce((a, o) => a + o.remaining, 0);
+  const projectedRrspRefund = rrspOpps.reduce((a, o) => a + o.refund, 0);
+  const marginalRate = rrspOpps[0]?.marginalRate ?? 0;
   const cesgAtRisk = cesg.reduce((a, c) => a + (c.status === 'behind' ? c.remainingYtd : 0), 0);
 
   return (
@@ -140,7 +141,9 @@ export function Investments() {
           <div className="text-xs uppercase tracking-wider text-ink-dim">RRSP refund opportunity</div>
           <div className="num text-3xl font-semibold mt-2 text-ink">{cad(projectedRrspRefund, true)}</div>
           <div className="text-xs text-ink-dim mt-1">
-            Sanjay has {cad(rrspSanjay?.remaining ?? 0, true)} RRSP room at ~{pct(marginalSanjay, 0)} marginal
+            {adults.length
+              ? `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''} at ~${pct(marginalRate, 0)} marginal (assumes ${cad(ASSUMED_ADULT_INCOME, true)} income)`
+              : 'No adults in household yet'}
           </div>
         </Card>
         <Card>
