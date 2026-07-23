@@ -16,6 +16,7 @@ import { Badge } from '../components/ui/Badge';
 import { Progress } from '../components/ui/Progress';
 import { cad, cadK, pct } from '../lib/format';
 import { contributionRoomUsed, cesgStatusPerKid, estimateMarginalRate } from '../lib/canadian';
+import { accountReturns } from '../lib/kpi';
 import { MoneyCell } from '../components/shared/MoneyCell';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { monthKey } from '../lib/format';
@@ -49,6 +50,15 @@ const KIND_LABEL: Record<AccountKind, string> = {
   non_registered: 'Non-registered',
   crypto: 'Crypto',
 };
+
+function ReturnCell({ value }: { value: number | null }) {
+  if (value === null) return <td className="py-2 pr-3 text-right num text-ink-dim">—</td>;
+  return (
+    <td className={`py-2 pr-3 text-right num ${value > 0 ? 'text-up' : value < 0 ? 'text-down' : 'text-ink-muted'}`}>
+      {pct(value, 1)}
+    </td>
+  );
+}
 
 export function Investments() {
   const fixtures = useAppStore((s) => s.fixtures)!;
@@ -182,7 +192,7 @@ export function Investments() {
           </div>
         </Card>
 
-        <Card className="lg:col-span-2" title="Accounts" subtitle={`${invAccounts.length} investment accounts`}>
+        <Card className="lg:col-span-2" title="Accounts" subtitle={`${invAccounts.length} investment accounts · 3yr & 5yr annualized`}>
           <div className="overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm">
               <thead>
@@ -191,6 +201,10 @@ export function Investments() {
                   <th className="py-2 pr-3">Owner</th>
                   <th className="py-2 pr-3 text-right">Value</th>
                   <th className="py-2 pr-3 text-right">MoM</th>
+                  <th className="py-2 pr-3 text-right">YTD</th>
+                  <th className="py-2 pr-3 text-right">YoY</th>
+                  <th className="py-2 pr-3 text-right">3yr</th>
+                  <th className="py-2 pr-3 text-right">5yr</th>
                   <th className="py-2 pr-3">6mo</th>
                 </tr>
               </thead>
@@ -200,6 +214,7 @@ export function Investments() {
                   const prev = prevValues.get(acc.id) ?? val;
                   const delta = prev ? (val - prev) / prev : 0;
                   const trend = (trendsByAcc[acc.id] ?? []).slice(-6);
+                  const returns = accountReturns(fixtures.investments, acc.id);
                   const ownerName =
                     acc.beneficiaryIds?.length
                       ? acc.beneficiaryIds.map((id) => personById.get(id)?.name).filter(Boolean).join(' & ') + ' (RESP)'
@@ -215,6 +230,10 @@ export function Investments() {
                       <td className={`py-2 pr-3 text-right num ${delta > 0 ? 'text-up' : delta < 0 ? 'text-down' : 'text-ink-muted'}`}>
                         {pct(delta, 1)}
                       </td>
+                      <ReturnCell value={returns.ytd} />
+                      <ReturnCell value={returns.yoy} />
+                      <ReturnCell value={returns.yr3} />
+                      <ReturnCell value={returns.yr5} />
                       <td className="py-2 pr-3 w-24">
                         <div className="h-8">
                           <ResponsiveContainer width="100%" height="100%">

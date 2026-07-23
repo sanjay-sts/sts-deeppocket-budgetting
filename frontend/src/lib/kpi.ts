@@ -137,6 +137,65 @@ export function latestInvestmentSnapshot(fixtures: Fixtures): InvestmentSnapshot
   return [...byAcc.values()];
 }
 
+// -------------------- Investment returns (issue #20) --------------------
+// Horizon changes derived from snapshot history. These are value changes, not
+// money-weighted returns — contributions/withdrawals move them too.
+
+export interface AccountReturns {
+  ytd: number | null; // vs the last snapshot of the prior calendar year
+  yoy: number | null; // vs the snapshot ~12 months before the latest
+  yr3: number | null; // annualized (CAGR) vs ~36 months back
+  yr5: number | null; // annualized (CAGR) vs ~60 months back
+}
+
+function monthsBetween(a: string, b: string): number {
+  return (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12
+    + (Number(b.slice(5, 7)) - Number(a.slice(5, 7)));
+}
+
+export function accountReturns(snapshots: InvestmentSnapshot[], accountId: string): AccountReturns {
+  const none: AccountReturns = { ytd: null, yoy: null, yr3: null, yr5: null };
+  const own = snapshots
+    .filter((s) => s.accountId === accountId)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const latest = own[own.length - 1];
+  if (!latest) return none;
+
+  // Latest snapshot dated at or before the cutoff; zero/negative baselines are unusable.
+  const baselineAtOrBefore = (cutoff: string): InvestmentSnapshot | undefined => {
+    let found: InvestmentSnapshot | undefined;
+    for (const s of own) {
+      if (s.date > cutoff) break;
+      found = s;
+    }
+    return found && found.amount > 0 ? found : undefined;
+  };
+
+  const change = (base: InvestmentSnapshot | undefined) =>
+    base ? latest.amount / base.amount - 1 : null;
+  const annualized = (base: InvestmentSnapshot | undefined) => {
+    if (!base) return null;
+    const months = monthsBetween(base.date, latest.date);
+    if (months <= 0) return null;
+    return Math.pow(latest.amount / base.amount, 12 / months) - 1;
+  };
+
+  const year = Number(latest.date.slice(0, 4));
+  const month = Number(latest.date.slice(5, 7));
+  // End-of-month cutoff N months before the latest snapshot ('-31' sorts after any real day).
+  const monthCutoff = (minusMonths: number) => {
+    const total = year * 12 + (month - 1) - minusMonths;
+    return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-31`;
+  };
+
+  return {
+    ytd: change(baselineAtOrBefore(`${year - 1}-12-31`)),
+    yoy: change(baselineAtOrBefore(monthCutoff(12))),
+    yr3: annualized(baselineAtOrBefore(monthCutoff(36))),
+    yr5: annualized(baselineAtOrBefore(monthCutoff(60))),
+  };
+}
+
 export interface NetWorthBreakdown {
   cash: number;
   investments: number;
