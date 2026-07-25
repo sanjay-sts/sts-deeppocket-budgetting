@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from ..constants import BANK_KINDS, CRA_LIMITS_2025
 from ..models import (
     Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
-    StatedRoom, Category, Transaction, BudgetLine, BudgetConfig, AppMeta,
+    StatedRoom, RecurringContribution, Category, Transaction, BudgetLine, BudgetConfig, AppMeta,
 )
 from .cesg import derive_cesg_grants
 
@@ -53,6 +53,26 @@ def _contribution_out(c: Contribution) -> dict:
     }
     if c.beneficiary_person_id:
         out["beneficiaryId"] = c.beneficiary_person_id
+    if c.recurring_id:
+        out["recurringId"] = c.recurring_id
+    return out
+
+
+def _recurring_out(s: RecurringContribution) -> dict:
+    out = {
+        "id": s.id,
+        "accountId": s.account_id,
+        "personId": s.person_id,
+        "kind": s.kind,
+        "amount": s.amount,
+        "frequency": s.frequency,
+        "startDate": s.start_date,
+        "paused": s.paused,
+    }
+    if s.end_date:
+        out["endDate"] = s.end_date
+    if s.beneficiary_person_id:
+        out["beneficiaryId"] = s.beneficiary_person_id
     return out
 
 
@@ -147,6 +167,8 @@ def build_payload(session: Session) -> dict:
         ],
         "contributionEvents": [_contribution_out(c) for c in contributions],
         "statedRoom": [_stated_room_out(r) for r in session.exec(select(StatedRoom)).all()],
+        "recurringContributions": [
+            _recurring_out(s) for s in session.exec(select(RecurringContribution)).all()],
         "cesgGrants": grants,
         "budget": budget,
         "craLimits": CRA_LIMITS_2025,

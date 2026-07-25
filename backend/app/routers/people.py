@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..constants import new_id
-from ..models import Person, AccountOwner, AccountBeneficiary, Contribution
+from ..models import Person, AccountOwner, AccountBeneficiary, Contribution, RecurringContribution
 from ..schemas import PersonCreate, PersonUpdate
 from ..services.deletion import cascade_delete_account
 from ..services.fixtures import _person_out
@@ -69,6 +69,10 @@ def delete_person(person_id: str, cascade: bool = False, session: Session = Depe
     for row in session.exec(select(AccountBeneficiary).where(AccountBeneficiary.person_id == person_id)).all():
         session.delete(row)
     for row in session.exec(select(Contribution).where(Contribution.person_id == person_id)).all():
+        session.delete(row)
+    for row in session.exec(select(RecurringContribution).where(
+            (RecurringContribution.person_id == person_id)
+            | (RecurringContribution.beneficiary_person_id == person_id))).all():
         session.delete(row)
     owned_rows = session.exec(select(AccountOwner).where(AccountOwner.person_id == person_id)).all()
     owned_ids = [r.account_id for r in owned_rows]

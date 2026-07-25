@@ -38,6 +38,9 @@ interface AppState {
   removeContribution: (id: string) => Promise<void>;
   saveStatedRoom: (b: import('../types').StatedRoom) => Promise<void>;
   removeStatedRoom: (personId: string, kind: import('../types').StatedRoomKind) => Promise<void>;
+  addRecurring: (b: import('../data/api').RecurringInput) => Promise<void>;
+  editRecurring: (id: string, b: { amount?: number; frequency?: import('../types').RecurringFrequency; endDate?: string; paused?: boolean }) => Promise<void>;
+  removeRecurring: (id: string) => Promise<void>;
   importCsv: (file: File) => Promise<import('../data/api').ImportSummary>;
   purgeData: (mode: PurgeMode) => Promise<void>;
   toasts: { id: string; message: string }[];
@@ -147,6 +150,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeContribution: async (id) => { await api.deleteContribution(id); await get().refetch(); },
   saveStatedRoom: async (b) => { await api.upsertStatedRoom(b); await get().refetch(); },
   removeStatedRoom: async (personId, kind) => { await api.deleteStatedRoom(personId, kind); await get().refetch(); },
+  addRecurring: async (b) => { await api.createRecurring(b); await get().refetch(); },
+  editRecurring: async (id, b) => { await api.updateRecurring(id, b); await get().refetch(); },
+  removeRecurring: async (id) => { await api.deleteRecurring(id); await get().refetch(); },
   importCsv: async (file) => {
     const summary = await api.importInvestmentsCsv(file);
     await get().refetch();

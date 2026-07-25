@@ -20,7 +20,7 @@ import { MoneyCell } from '../components/shared/MoneyCell';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { monthKey } from '../lib/format';
 import { listSnapshots, type SnapshotRow } from '../data/api';
-import type { AccountKind, ContributionKind, StatedRoomKind } from '../types';
+import type { AccountKind, ContributionKind, StatedRoomKind, RecurringFrequency } from '../types';
 
 const KIND_COLORS: Record<AccountKind, string> = {
   chequing: '#64748b',
@@ -445,7 +445,7 @@ export function ContributionsEditor() {
         <tbody className="divide-y divide-line">
           {events.map((e) => (
             <tr key={e.id} className="border-t border-line">
-              <td className="py-1.5 pr-3 text-ink">{e.date}</td><td className="py-1.5 pr-3 text-ink-muted">{e.kind}</td><td className="py-1.5 pr-3 text-ink num">{e.amount.toLocaleString()}</td>
+              <td className="py-1.5 pr-3 text-ink">{e.date}</td><td className="py-1.5 pr-3 text-ink-muted">{e.kind}{e.recurringId && <span className="ml-2"><Badge tone="info">auto</Badge></span>}</td><td className="py-1.5 pr-3 text-ink num">{e.amount.toLocaleString()}</td>
               <td className="text-right"><button className="text-down" onClick={() => setPendingDelete(e.id)}>Delete</button></td>
             </tr>
           ))}
@@ -462,7 +462,113 @@ export function ContributionsEditor() {
           setPendingDelete(null);
         }}
       />
+      <RecurringEditor />
     </Card>
+  );
+}
+
+const FREQ_LABEL: Record<RecurringFrequency, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Every 2 weeks',
+  semi_monthly: '1st & 15th',
+  monthly: 'Monthly',
+};
+
+// Standing deposit orders (issue #28). The backend materializes real contribution
+// events from these on every data read; rows above get an "auto" badge.
+function RecurringEditor() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const addRecurring = useAppStore((s) => s.addRecurring);
+  const editRecurring = useAppStore((s) => s.editRecurring);
+  const removeRecurring = useAppStore((s) => s.removeRecurring);
+  const people = fixtures?.household ?? [];
+  const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
+  const kids = people.filter((p) => p.role === 'child');
+  const personById = new Map(people.map((p) => [p.id, p]));
+  const schedules = fixtures?.recurringContributions ?? [];
+  const [f, setF] = useState({
+    accountId: '', personId: '', kind: 'rrsp' as ContributionKind,
+    frequency: 'monthly' as RecurringFrequency, startDate: '', amount: '', beneficiaryId: '',
+  });
+  const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
+  async function submit() {
+    setError('');
+    try {
+      await addRecurring({
+        accountId: f.accountId, personId: f.personId, kind: f.kind, amount: Number(f.amount),
+        frequency: f.frequency, startDate: f.startDate,
+        beneficiaryId: f.kind === 'resp' ? f.beneficiaryId || undefined : undefined,
+      });
+      setF({ ...f, startDate: '', amount: '' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-line">
+      <div className="text-xs text-ink-dim uppercase tracking-wider mb-2">
+        Recurring auto-deposits · missed periods are added automatically when the app loads
+      </div>
+      <div className="flex gap-2 items-end flex-wrap mb-3">
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
+          <option value="">Contributor…</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+          <option value="">Account…</option>
+          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as ContributionKind })}>
+          {CONTRIBUTION_KINDS_LIST.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        {f.kind === 'resp' && (
+          <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.beneficiaryId} onChange={(e) => setF({ ...f, beneficiaryId: e.target.value })}>
+            <option value="">Beneficiary…</option>
+            {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+          </select>
+        )}
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.frequency} onChange={(e) => setF({ ...f, frequency: e.target.value as RecurringFrequency })}>
+          {(Object.keys(FREQ_LABEL) as RecurringFrequency[]).map((k) => <option key={k} value={k}>{FREQ_LABEL[k]}</option>)}
+        </select>
+        <input type="date" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand [color-scheme:dark]" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} />
+        <input type="number" step="0.01" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <Button onClick={submit} disabled={!f.personId || !f.accountId || !f.startDate || !f.amount || (f.kind === 'resp' && !f.beneficiaryId)}>Add</Button>
+      </div>
+      {error && <p className="text-down text-sm mb-2">{error}</p>}
+      {schedules.length > 0 && (
+        <div className="space-y-1.5 text-sm">
+          {schedules.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 bg-bg-elev border border-line rounded-md px-3 py-1.5">
+              <span className="text-ink">
+                {personById.get(s.personId)?.name ?? s.personId} · {s.kind.toUpperCase()} ·{' '}
+                <span className="num">{cad(s.amount, true)}</span> {FREQ_LABEL[s.frequency].toLowerCase()} from {s.startDate}
+                {s.endDate && ` until ${s.endDate}`}
+              </span>
+              {s.paused && <Badge tone="warning">paused</Badge>}
+              <span className="flex-1" />
+              <button className="text-ink-muted hover:text-ink" onClick={() => editRecurring(s.id, { paused: !s.paused })}>
+                {s.paused ? 'Resume' : 'Pause'}
+              </button>
+              <button className="text-down" onClick={() => setPendingDelete(s.id)}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title="Delete this recurring deposit?"
+        description="Future occurrences stop; deposits already recorded are kept."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          await removeRecurring(pendingDelete);
+          setPendingDelete(null);
+        }}
+      />
+    </div>
   );
 }
 
