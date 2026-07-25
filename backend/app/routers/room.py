@@ -21,8 +21,11 @@ def upsert_stated_room(body: StatedRoomUpsert, session: Session = Depends(get_se
         raise HTTPException(422, f"kind must be one of {sorted(STATED_ROOM_KINDS)}")
     if body.amount < 0:
         raise HTTPException(422, "amount must be >= 0")
-    if not session.get(Person, body.personId):
+    person = session.get(Person, body.personId)
+    if not person:
         raise HTTPException(404, "Person not found")
+    if person.role != "adult":
+        raise HTTPException(422, "Stated room applies to adults; kids' RESP room is tracked per beneficiary.")
     row = session.exec(select(StatedRoom).where(
         StatedRoom.person_id == body.personId, StatedRoom.kind == body.kind)).first()
     if row:

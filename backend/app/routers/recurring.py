@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -33,6 +34,14 @@ def create_recurring(body: RecurringCreate, session: Session = Depends(get_sessi
         end = normalize_date(body.endDate) if body.endDate else None
     except ValueError as e:
         raise HTTPException(422, str(e))
+    dup = session.exec(select(RecurringContribution).where(
+        RecurringContribution.account_id == body.accountId,
+        RecurringContribution.person_id == body.personId,
+        RecurringContribution.kind == body.kind,
+        RecurringContribution.frequency == body.frequency,
+        RecurringContribution.amount == body.amount)).first()
+    if dup:
+        raise HTTPException(409, "An identical recurring deposit already exists — it would double every occurrence.")
     s = RecurringContribution(
         id=new_id("rec"), account_id=body.accountId, person_id=body.personId,
         kind=body.kind, amount=body.amount, beneficiary_person_id=body.beneficiaryId,
@@ -84,6 +93,11 @@ def delete_recurring(recurring_id: str, session: Session = Depends(get_session))
 
 
 @router.post("/materialize")
-def materialize(body: MaterializeRequest = MaterializeRequest(), session: Session = Depends(get_session)):
-    today = body.today or date.today().isoformat()
+def materialize(body: Optional[MaterializeRequest] = None, session: Session = Depends(get_session)):
+    raw = (body.today if body else None) or date.today().isoformat()
+    try:
+        today = normalize_date(raw)
+        date.fromisoformat(today)  # normalize_date checks shape, not calendar validity
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     return {"created": materialize_recurring(session, today)}

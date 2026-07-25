@@ -103,7 +103,8 @@ export function Investments() {
 
   // Contribution room — incomes aren't stored on household members yet (issue #23),
   // so every adult uses the same assumed income for RRSP limits.
-  const currentYear = Number(lastSnapYm.slice(0, 4));
+  // fall back to the real year when there are no snapshots yet (fresh/purged DB)
+  const currentYear = Number(lastSnapYm.slice(0, 4)) || new Date().getFullYear();
   const adults = fixtures.household.filter((p) => p.role === 'adult');
   const statedRoom = fixtures.statedRoom ?? [];
   const room = contributionRoomUsed(
@@ -130,6 +131,8 @@ export function Investments() {
   const rrspRoomLeft = rrspOpps.reduce((a, o) => a + o.remaining, 0);
   const projectedRrspRefund = rrspOpps.reduce((a, o) => a + o.refund, 0);
   const marginalRate = rrspOpps[0]?.marginalRate ?? 0;
+  const allRrspStated =
+    adults.length > 0 && adults.every((p) => statedRoom.some((s) => s.personId === p.id && s.kind === 'rrsp'));
   const cesgAtRisk = cesg.reduce((a, c) => a + (c.status === 'behind' ? c.remainingYtd : 0), 0);
 
   return (
@@ -146,7 +149,7 @@ export function Investments() {
           <div className="num text-3xl font-semibold mt-2 text-ink">{cad(projectedRrspRefund, true)}</div>
           <div className="text-xs text-ink-dim mt-1">
             {adults.length
-              ? `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''} at ~${pct(marginalRate, 0)} marginal (assumes ${cad(ASSUMED_ADULT_INCOME, true)} income)`
+              ? `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''} at ~${pct(marginalRate, 0)} marginal ${allRrspStated ? '(room from CRA-stated values)' : `(assumes ${cad(ASSUMED_ADULT_INCOME, true)} income)`}`
               : 'No adults in household yet'}
           </div>
         </Card>
@@ -340,6 +343,7 @@ function StatedRoomEditor() {
   const fixtures = useAppStore((s) => s.fixtures);
   const saveStatedRoom = useAppStore((s) => s.saveStatedRoom);
   const removeStatedRoom = useAppStore((s) => s.removeStatedRoom);
+  const pushToast = useAppStore((s) => s.pushToast);
   const adults = (fixtures?.household ?? []).filter((p) => p.role === 'adult');
   const personById = new Map((fixtures?.household ?? []).map((p) => [p.id, p]));
   const stated = fixtures?.statedRoom ?? [];
@@ -379,7 +383,9 @@ function StatedRoomEditor() {
             <span key={`${s.personId}-${s.kind}`} className="inline-flex items-center gap-2 bg-bg-elev border border-line rounded-md px-2 py-1 text-ink-muted">
               {personById.get(s.personId)?.name ?? s.personId} · {s.kind.toUpperCase()} ·{' '}
               <span className="num text-ink">{cad(s.amount, true)}</span>
-              <button className="text-down" onClick={() => removeStatedRoom(s.personId, s.kind)}>×</button>
+              <button className="text-down" onClick={async () => {
+                try { await removeStatedRoom(s.personId, s.kind); } catch { pushToast("Couldn't remove stated room"); }
+              }}>×</button>
             </span>
           ))}
         </div>
@@ -481,6 +487,7 @@ function RecurringEditor() {
   const addRecurring = useAppStore((s) => s.addRecurring);
   const editRecurring = useAppStore((s) => s.editRecurring);
   const removeRecurring = useAppStore((s) => s.removeRecurring);
+  const pushToast = useAppStore((s) => s.pushToast);
   const people = fixtures?.household ?? [];
   const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
   const kids = people.filter((p) => p.role === 'child');
@@ -549,7 +556,9 @@ function RecurringEditor() {
               </span>
               {s.paused && <Badge tone="warning">paused</Badge>}
               <span className="flex-1" />
-              <button className="text-ink-muted hover:text-ink" onClick={() => editRecurring(s.id, { paused: !s.paused })}>
+              <button className="text-ink-muted hover:text-ink" onClick={async () => {
+                try { await editRecurring(s.id, { paused: !s.paused }); } catch { pushToast("Couldn't update schedule"); }
+              }}>
                 {s.paused ? 'Resume' : 'Pause'}
               </button>
               <button className="text-down" onClick={() => setPendingDelete(s.id)}>Delete</button>
@@ -564,7 +573,7 @@ function RecurringEditor() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={async () => {
           if (!pendingDelete) return;
-          await removeRecurring(pendingDelete);
+          try { await removeRecurring(pendingDelete); } catch { pushToast("Couldn't delete schedule"); }
           setPendingDelete(null);
         }}
       />

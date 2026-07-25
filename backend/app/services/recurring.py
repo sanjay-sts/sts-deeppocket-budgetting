@@ -8,6 +8,7 @@ the user deleted is never regenerated.
 from calendar import monthrange
 from datetime import date, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..models import Contribution, RecurringContribution
@@ -47,23 +48,30 @@ def materialize_recurring(session: Session, today: str) -> int:
     t = date.fromisoformat(today)
     created = 0
     for s in session.exec(select(RecurringContribution)).all():
-        if s.paused:
-            continue
-        after = date.fromisoformat(s.last_materialized) if s.last_materialized else None
-        for d in _due_dates(s, t):
-            if after and d <= after:
-                continue
-            event_id = f"{s.id}:{d.isoformat()}"
-            if session.get(Contribution, event_id):
-                continue
-            session.add(Contribution(
-                id=event_id, account_id=s.account_id, person_id=s.person_id,
-                date=d.isoformat(), amount=s.amount, kind=s.kind,
-                beneficiary_person_id=s.beneficiary_person_id, recurring_id=s.id,
-            ))
-            created += 1
+        if not s.paused:
+            after = date.fromisoformat(s.last_materialized) if s.last_materialized else None
+            for d in _due_dates(s, t):
+                if after and d <= after:
+                    continue
+                event_id = f"{s.id}:{d.isoformat()}"
+                if session.get(Contribution, event_id):
+                    continue
+                session.add(Contribution(
+                    id=event_id, account_id=s.account_id, person_id=s.person_id,
+                    date=d.isoformat(), amount=s.amount, kind=s.kind,
+                    beneficiary_person_id=s.beneficiary_person_id, recurring_id=s.id,
+                ))
+                created += 1
+        # Advance the cursor for paused schedules too: the paused window is consumed,
+        # not deferred — deposits that never happened must not appear on resume.
         if not s.last_materialized or today > s.last_materialized:
             s.last_materialized = today
             session.add(s)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # A concurrent materialization won the race and committed the same events
+        # first (both runs walk every schedule, so the batches are identical).
+        session.rollback()
+        return 0
     return created

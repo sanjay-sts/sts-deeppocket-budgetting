@@ -77,15 +77,38 @@ def test_semi_monthly(client):
     assert sorted(e["date"] for e in _events(client, sid)) == ["2026-01-15", "2026-02-01", "2026-02-15"]
 
 
-def test_paused_and_end_date(client):
+def test_paused_schedule_does_not_backfill_on_resume(client):
     pid, aid = _setup(client)
     sid = _schedule(client, pid, aid).json()["id"]
     client.put(f"/api/recurring/{sid}", json={"paused": True})
     client.post("/api/recurring/materialize", json={"today": "2026-03-20"})
     assert _events(client, sid) == []
-    client.put(f"/api/recurring/{sid}", json={"paused": False, "endDate": "2026-02-01"})
+    # The paused window is consumed, not deferred: those deposits never happened at
+    # the bank, so resuming must only generate occurrences after the resume.
+    client.put(f"/api/recurring/{sid}", json={"paused": False})
+    client.post("/api/recurring/materialize", json={"today": "2026-04-20"})
+    assert sorted(e["date"] for e in _events(client, sid)) == ["2026-04-15"]
+
+
+def test_end_date_bounds_occurrences(client):
+    pid, aid = _setup(client)
+    sid = _schedule(client, pid, aid, endDate="2026-02-01").json()["id"]
     client.post("/api/recurring/materialize", json={"today": "2026-03-20"})
     assert sorted(e["date"] for e in _events(client, sid)) == ["2026-01-15"]
+
+
+def test_materialize_rejects_bad_date(client):
+    assert client.post("/api/recurring/materialize", json={"today": "not-a-date"}).status_code == 422
+    # right shape, impossible calendar date
+    assert client.post("/api/recurring/materialize", json={"today": "2026-13-01"}).status_code == 422
+
+
+def test_exact_duplicate_schedule_rejected(client):
+    pid, aid = _setup(client)
+    assert _schedule(client, pid, aid).status_code == 201
+    assert _schedule(client, pid, aid).status_code == 409
+    # a different amount is a genuinely different standing order
+    assert _schedule(client, pid, aid, amount=750).status_code == 201
 
 
 def test_deleted_occurrence_is_not_resurrected(client):
