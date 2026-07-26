@@ -48,6 +48,11 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 
+def parse_amount(s: str) -> float:
+    """Tolerate thousands separators and a leading currency symbol ('$1,234.56')."""
+    return float(s.replace(",", "").replace("$", "").strip())
+
+
 def normalize_date(s: str) -> str:
     """Accept 'YYYYMMDD', 'YYYY-MM-DD', or 'MM/DD/YYYY' (bank exports); return ISO."""
     s = s.strip()
