@@ -15,7 +15,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Progress } from '../components/ui/Progress';
 import { cad, cadK, pct } from '../lib/format';
-import { contributionRoomUsed, cesgStatusPerKid, rrspRefundOpportunities, ASSUMED_ADULT_INCOME } from '../lib/canadian';
+import { contributionRoomUsed, cesgStatusPerKid, rrspRefundOpportunities } from '../lib/canadian';
 import { accountReturns } from '../lib/kpi';
 import { MoneyCell } from '../components/shared/MoneyCell';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
@@ -111,8 +111,8 @@ export function Investments() {
     value: Math.round(value),
   }));
 
-  // Contribution room — incomes aren't stored on household members yet (issue #23),
-  // so every adult uses the same assumed income for RRSP limits.
+  // Contribution room — RRSP limits come from each member's own recorded income
+  // (issue #23); members without one contribute no income-derived room.
   // fall back to the real year when there are no snapshots yet (fresh/purged DB)
   const currentYear = Number(lastSnapYm.slice(0, 4)) || new Date().getFullYear();
   const adults = fixtures.household.filter((p) => p.role === 'adult');
@@ -121,7 +121,7 @@ export function Investments() {
     fixtures.contributionEvents,
     currentYear,
     limits,
-    Object.fromEntries(adults.map((p) => [p.id, ASSUMED_ADULT_INCOME])),
+    Object.fromEntries(adults.map((p) => [p.id, p.grossIncome ?? 0])),
     statedRoom,
   );
 
@@ -136,13 +136,25 @@ export function Investments() {
 
   // Tax hints
   const rrspOpps = rrspRefundOpportunities(
-    fixtures.household, fixtures.contributionEvents, currentYear, limits, ASSUMED_ADULT_INCOME, statedRoom,
+    fixtures.household, fixtures.contributionEvents, currentYear, limits, statedRoom,
   );
   const rrspRoomLeft = rrspOpps.reduce((a, o) => a + o.remaining, 0);
   const projectedRrspRefund = rrspOpps.reduce((a, o) => a + o.refund, 0);
-  const marginalRate = rrspOpps[0]?.marginalRate ?? 0;
+  // One marginal rate is only meaningful when the adults share a tax bracket.
+  const knownRates = [...new Set(rrspOpps.filter((o) => o.incomeKnown).map((o) => o.marginalRate))];
+  const missingIncome = rrspOpps.filter((o) => !o.incomeKnown);
   const allRrspStated =
     adults.length > 0 && adults.every((p) => statedRoom.some((s) => s.personId === p.id && s.kind === 'rrsp'));
+  const rrspSubtitle = adults.length === 0
+    ? 'No adults in household yet — add one in Settings → Household'
+    : missingIncome.length === adults.length && !allRrspStated
+      ? `Add ${adults.length > 1 ? 'incomes' : 'an income'} in Settings → Household to estimate this`
+      : [
+          `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''}`,
+          knownRates.length === 1 ? `at ~${pct(knownRates[0], 0)} marginal` : '',
+          allRrspStated ? '(room from CRA-stated values)' : '',
+          missingIncome.length ? `· ${missingIncome.map((o) => o.name).join(', ')} missing an income` : '',
+        ].filter(Boolean).join(' ');
   const cesgAtRisk = cesg.reduce((a, c) => a + (c.status === 'behind' ? c.remainingYtd : 0), 0);
 
   return (
@@ -157,11 +169,7 @@ export function Investments() {
         <Card>
           <div className="text-xs uppercase tracking-wider text-ink-dim">RRSP refund opportunity</div>
           <div className="num text-3xl font-semibold mt-2 text-ink">{cad(projectedRrspRefund, true)}</div>
-          <div className="text-xs text-ink-dim mt-1">
-            {adults.length
-              ? `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''} at ~${pct(marginalRate, 0)} marginal ${allRrspStated ? '(room from CRA-stated values)' : `(assumes ${cad(ASSUMED_ADULT_INCOME, true)} income)`}`
-              : 'No adults in household yet'}
-          </div>
+          <div className="text-xs text-ink-dim mt-1">{rrspSubtitle}</div>
         </Card>
         <Card>
           <div className="text-xs uppercase tracking-wider text-ink-dim">CESG left to capture this year</div>

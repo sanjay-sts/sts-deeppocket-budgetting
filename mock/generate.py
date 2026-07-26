@@ -2,9 +2,9 @@
 
 Produces 12 months of deterministic Canadian-family financial data:
 
-  mock/out/bank_transactions.csv   matches the user's chequing/savings schema
-  mock/out/credit_card.csv         matches the user's credit-card-bill schema
-  mock/out/investments.csv         matches the user's monthly snapshot schema
+  mock/out/bank_transactions.csv   chequing/savings export schema
+  mock/out/credit_card.csv         credit-card-bill export schema
+  mock/out/investments.csv         monthly snapshot schema
   mock/out/fixtures.json           normalized feed the React frontend reads
 
 The frontend reads fixtures.json directly via src/data/api.ts. The three CSVs
@@ -33,6 +33,10 @@ from typing import Any, Iterable
 # Canadian constants
 # ---------------------------------------------------------------------------
 
+# Pinned so a bare `python mock/generate.py` reproduces the committed fixture instead of
+# sliding the window to the real today. Pass --today to move it deliberately.
+DEFAULT_TODAY = "2026-04-14"
+
 CRA_LIMITS_2025: dict[str, float] = {
     "TFSA_ANNUAL": 7000,
     "RRSP_ANNUAL_PCT": 0.18,
@@ -51,35 +55,35 @@ CRA_LIMITS_2025: dict[str, float] = {
 # ---------------------------------------------------------------------------
 
 PEOPLE: list[dict[str, Any]] = [
-    {"id": "avery", "name": "Avery", "role": "adult", "birthYear": 1986},
-    {"id": "jordan", "name": "Jordan", "role": "adult", "birthYear": 1988},
-    {"id": "kid1", "name": "Milo", "role": "child", "birthYear": 2017},
-    {"id": "kid2", "name": "Nova", "role": "child", "birthYear": 2020},
+    {"id": "p_adult1", "name": "Avery", "role": "adult", "birthYear": 1986, "grossIncome": 132000},
+    {"id": "p_adult2", "name": "Jordan", "role": "adult", "birthYear": 1988, "grossIncome": 76000},
+    {"id": "p_child1", "name": "Milo", "role": "child", "birthYear": 2017},
+    {"id": "p_child2", "name": "Nova", "role": "child", "birthYear": 2020},
 ]
 
 ACCOUNTS: list[dict[str, Any]] = [
     # cash
-    {"id": "avery_chequing", "name": "Maple Trust Chequing (Avery)", "kind": "chequing", "institution": "TD",      "ownerIds": ["avery"]},
-    {"id": "avery_savings",  "name": "Maple Trust Savings (Avery)",  "kind": "savings",  "institution": "TD",      "ownerIds": ["avery"]},
-    {"id": "jordan_chequing", "name": "Maple Trust Chequing (Jordan)", "kind": "chequing", "institution": "TD",      "ownerIds": ["jordan"]},
-    {"id": "joint_savings",   "name": "Beacon Joint Savings",     "kind": "savings",  "institution": "Beacon Bank", "ownerIds": ["avery", "jordan"]},
+    {"id": "chequing_1", "name": "Maple Trust Chequing (Avery)", "kind": "chequing", "institution": "Maple Trust",      "ownerIds": ["p_adult1"]},
+    {"id": "savings_1",  "name": "Maple Trust Savings (Avery)",  "kind": "savings",  "institution": "Maple Trust",      "ownerIds": ["p_adult1"]},
+    {"id": "chequing_2", "name": "Maple Trust Chequing (Jordan)", "kind": "chequing", "institution": "Maple Trust",      "ownerIds": ["p_adult2"]},
+    {"id": "savings_joint",   "name": "Harbour Joint Savings",     "kind": "savings",  "institution": "Harbour", "ownerIds": ["p_adult1", "p_adult2"]},
     # credit cards
-    {"id": "avery_td_visa",     "name": "Maple Trust Visa (Avery)",     "kind": "credit_card", "institution": "TD",   "ownerIds": ["avery"], "isLiability": True},
-    {"id": "avery_summit_rewards", "name": "Summit Rewards (Avery)", "kind": "credit_card", "institution": "Amex", "ownerIds": ["avery"], "isLiability": True},
-    {"id": "jordan_harbour_avion",   "name": "Harbour Avion (Jordan)",   "kind": "credit_card", "institution": "RBC",  "ownerIds": ["jordan"], "isLiability": True},
+    {"id": "cc_visa_1",     "name": "Maple Trust Visa (Avery)",     "kind": "credit_card", "institution": "Maple Trust",   "ownerIds": ["p_adult1"], "isLiability": True},
+    {"id": "cc_rewards_1", "name": "Summit Rewards (Avery)", "kind": "credit_card", "institution": "Summit", "ownerIds": ["p_adult1"], "isLiability": True},
+    {"id": "cc_travel_2",   "name": "Northline Travel (Jordan)",   "kind": "credit_card", "institution": "Northline",  "ownerIds": ["p_adult2"], "isLiability": True},
     # investments
-    {"id": "ws_tfsa_avery",   "name": "Blueleaf TFSA (Avery)",  "kind": "tfsa",   "institution": "blueleaf", "ownerIds": ["avery"]},
-    {"id": "ws_crypto_avery", "name": "Blueleaf Crypto (Avery)","kind": "crypto", "institution": "blueleaf", "ownerIds": ["avery"]},
-    {"id": "qt_tfsa_avery",   "name": "Mapletrade TFSA (Avery)",     "kind": "tfsa",   "institution": "mapletrade",    "ownerIds": ["avery"]},
-    {"id": "qt_rrsp_avery",   "name": "Mapletrade RRSP (Avery)",     "kind": "rrsp",   "institution": "mapletrade",    "ownerIds": ["avery"]},
-    {"id": "qt_resp_kid1",     "name": "Mapletrade RESP (Milo)",      "kind": "resp",   "institution": "mapletrade",    "ownerIds": ["avery", "jordan"], "beneficiaryId": "kid1"},
-    {"id": "qt_resp_kid2",     "name": "Mapletrade RESP (Nova)",       "kind": "resp",   "institution": "mapletrade",    "ownerIds": ["avery", "jordan"], "beneficiaryId": "kid2"},
-    {"id": "northline_tfsa_avery",   "name": "Northline Direct TFSA (Avery)",  "kind": "tfsa",   "institution": "northline",  "ownerIds": ["avery"]},
-    {"id": "sl_dccp_avery",   "name": "Cedarlife DCCP (Avery)",       "kind": "dcpp",   "institution": "cedarlife",      "ownerIds": ["avery"]},
-    {"id": "northline_tfsa_jordan",   "name": "Northline Direct TFSA (Jordan)",  "kind": "tfsa",   "institution": "northline",  "ownerIds": ["jordan"]},
-    {"id": "northline_rrsp_jordan",   "name": "Northline Direct RRSP (Jordan)",  "kind": "rrsp",   "institution": "northline",  "ownerIds": ["jordan"]},
-    {"id": "ws_fhsa_avery",   "name": "Blueleaf FHSA (Avery)",  "kind": "fhsa",   "institution": "blueleaf", "ownerIds": ["avery"]},
-    {"id": "ws_fhsa_jordan",   "name": "Blueleaf FHSA (Jordan)",  "kind": "fhsa",   "institution": "blueleaf", "ownerIds": ["jordan"]},
+    {"id": "tfsa_1",   "name": "BlueLeaf TFSA (Avery)",  "kind": "tfsa",   "institution": "blueleaf", "ownerIds": ["p_adult1"]},
+    {"id": "crypto_1", "name": "BlueLeaf Crypto (Avery)","kind": "crypto", "institution": "blueleaf", "ownerIds": ["p_adult1"]},
+    {"id": "tfsa_2",   "name": "NorthPeak TFSA (Avery)",     "kind": "tfsa",   "institution": "northpeak",    "ownerIds": ["p_adult1"]},
+    {"id": "rrsp_1",   "name": "NorthPeak RRSP (Avery)",     "kind": "rrsp",   "institution": "northpeak",    "ownerIds": ["p_adult1"]},
+    {"id": "resp_1",     "name": "NorthPeak RESP (Milo)",      "kind": "resp",   "institution": "northpeak",    "ownerIds": ["p_adult1", "p_adult2"], "beneficiaryId": "p_child1"},
+    {"id": "resp_2",     "name": "NorthPeak RESP (Nova)",       "kind": "resp",   "institution": "northpeak",    "ownerIds": ["p_adult1", "p_adult2"], "beneficiaryId": "p_child2"},
+    {"id": "tfsa_3",   "name": "MapleTrade TFSA (Avery)",  "kind": "tfsa",   "institution": "mapletrade",  "ownerIds": ["p_adult1"]},
+    {"id": "dcpp_1",   "name": "CedarLife DCPP (Avery)",       "kind": "dcpp",   "institution": "cedarlife",      "ownerIds": ["p_adult1"]},
+    {"id": "tfsa_4",   "name": "MapleTrade TFSA (Jordan)",  "kind": "tfsa",   "institution": "mapletrade",  "ownerIds": ["p_adult2"]},
+    {"id": "rrsp_2",   "name": "MapleTrade RRSP (Jordan)",  "kind": "rrsp",   "institution": "mapletrade",  "ownerIds": ["p_adult2"]},
+    {"id": "fhsa_1",   "name": "BlueLeaf FHSA (Avery)",  "kind": "fhsa",   "institution": "blueleaf", "ownerIds": ["p_adult1"]},
+    {"id": "fhsa_2",   "name": "BlueLeaf FHSA (Jordan)",  "kind": "fhsa",   "institution": "blueleaf", "ownerIds": ["p_adult2"]},
 ]
 
 CATEGORIES: list[dict[str, Any]] = [
@@ -92,6 +96,7 @@ CATEGORIES: list[dict[str, Any]] = [
     {"id": "healthcare",      "name": "Healthcare",      "group": "essentials", "bucket503020": "needs", "isEssential": True},
     {"id": "childcare",       "name": "Childcare",       "group": "essentials", "bucket503020": "needs", "isEssential": True},
     {"id": "phone_internet",  "name": "Phone & Internet","group": "essentials", "bucket503020": "needs", "isEssential": True},
+    {"id": "home_maintenance","name": "Home Maintenance","group": "essentials", "bucket503020": "needs", "isEssential": True},
     # lifestyle
     {"id": "dining",          "name": "Dining",          "group": "lifestyle",  "bucket503020": "wants"},
     {"id": "entertainment",   "name": "Entertainment",   "group": "lifestyle",  "bucket503020": "wants"},
@@ -103,7 +108,7 @@ CATEGORIES: list[dict[str, Any]] = [
     # family
     {"id": "kids",            "name": "Kids",            "group": "family",     "bucket503020": "needs"},
     {"id": "education",       "name": "Education",       "group": "family",     "bucket503020": "needs"},
-    {"id": "gifts",           "name": "Gifts",           "group": "family",     "bucket503020": "wants"},
+    {"id": "gifts",           "name": "Gifts & Donations", "group": "family",   "bucket503020": "wants"},
     # financial
     {"id": "investments_out", "name": "Investments",     "group": "financial",  "bucket503020": "savings"},
     {"id": "bank_fees",       "name": "Bank Fees",       "group": "financial",  "bucket503020": "needs"},
@@ -125,27 +130,27 @@ CATEGORIES: list[dict[str, Any]] = [
 # Raw merchant strings as they would appear on a real statement
 MERCHANTS: dict[str, list[str]] = {
     "groceries": [
-        "LOBLAWS #1234", "NO FRILLS Lakeside", "COSTCO WHOLESALE W1283",
-        "REAL CDN SUPERSTORE", "WAL-MART SUPERCENTER#5726", "FARM BOY #45",
+        "LOBLAWS #8802", "NO FRILLS #2210", "COSTCO WHOLESALE W4471",
+        "REAL CDN SUPERSTORE", "WAL-MART SUPERCENTER#3190", "FARM BOY #12",
         "T&T SUPERMARKET",
     ],
     "dining": [
-        "TIM HORTONS #4521", "STARBUCKS #00879", "A&W #1144",
-        "MCDONALD'S #11423", "BOSTON PIZZA", "PIZZA HUT",
-        "CAFECO-NORTHWIND-63015",
+        "TIM HORTONS #0918", "STARBUCKS #00214", "A&W #2078",
+        "MCDONALD'S #20551", "BOSTON PIZZA", "PIZZA HUT",
+        "CAFETERIA-NORTHWIND-40188",
     ],
     "transportation": [
-        "PETRO-CANADA #00231", "ESSO RM 5512", "SHELL C04563",
-        "PRESTO FARES", "UBER CANADA", "PARKING METER 7782",
+        "PETRO-CANADA #00744", "ESSO RM 1030", "SHELL C01188",
+        "PRESTO FARES", "UBER CANADA", "PARKING METER 4310",
     ],
     "subscriptions": [
-        "NETFLIX.COM", "DISNEY PLUS", "CRAVE", "SPOTIFY P0J0PXVN",
-        "AMZN PRIME CA*XD9", "APPLE.COM/BILL ICLOUD",
+        "NETFLIX.COM", "DISNEY PLUS", "CRAVE", "SPOTIFY R4T7QWZ2",
+        "AMZN PRIME CA*KT4", "APPLE.COM/BILL ICLOUD",
     ],
     "shopping": [
-        "AMZN Mktp CA*XD4BI0T33", "AMAZON.CA*RT8KX",
-        "CANADIAN TIRE #0034", "HOME DEPOT #7012", "HUDSON'S BAY",
-        "INDIGO BOOKS #221", "WAYFAIR.CA",
+        "AMZN Mktp CA*QW7ZP2M91", "AMAZON.CA*LM3QP",
+        "CANADIAN TIRE #0177", "HOME DEPOT #4409", "HUDSON'S BAY",
+        "INDIGO BOOKS #884", "WAYFAIR.CA",
     ],
     "kids": [
         "INDIGO KIDS", "MASTERMIND TOYS", "WALMART KIDS",
@@ -154,13 +159,13 @@ MERCHANTS: dict[str, list[str]] = {
         "CINEPLEX ODEON", "RECREATION CENTRE",
     ],
     "personal_care": [
-        "GREAT CLIPS #023", "SEPHORA #441",
+        "GREAT CLIPS #118", "SEPHORA #209",
     ],
     "healthcare": [
-        "SHOPPERS DRUG MART #1124", "REXALL #4501", "DR REYES DENTISTRY",
+        "SHOPPERS DRUG MART #3307", "REXALL #2270", "MAPLE LANE DENTISTRY",
     ],
     "travel": [
-        "AIR CANADA", "WESTJET", "AIRBNB CA*HX9",
+        "AIR CANADA", "WESTJET", "AIRBNB CA*RV2",
     ],
     "gifts": [
         "AMAZON.CA GIFTS", "INDIGO GIFTS",
@@ -170,17 +175,17 @@ MERCHANTS: dict[str, list[str]] = {
 # Alias table — collapses messy raw strings to a canonical merchant name.
 # Anything not listed falls through to a title-cased version of the raw string.
 ALIASES: dict[str, str] = {
-    "AMZN Mktp CA*XD4BI0T33": "Amazon.ca",
-    "AMAZON.CA*RT8KX": "Amazon.ca",
-    "AMZN PRIME CA*XD9": "Amazon Prime",
+    "AMZN Mktp CA*QW7ZP2M91": "Amazon.ca",
+    "AMAZON.CA*LM3QP": "Amazon.ca",
+    "AMZN PRIME CA*KT4": "Amazon Prime",
     "AMAZON.CA GIFTS": "Amazon.ca",
-    "CAFECO-NORTHWIND-63015": "Northwind Cafeteria",
-    "SPOTIFY P0J0PXVN": "Spotify",
+    "CAFETERIA-NORTHWIND-40188": "Northwind Cafeteria",
+    "SPOTIFY R4T7QWZ2": "Spotify",
     "APPLE.COM/BILL ICLOUD": "iCloud",
-    "GOODLIFE CLUBS   MSP": "GoodLife Fitness",
-    "Maple Trust Assur  INS": "Maple Trust Insurance",
-    "Sunnyside Daycare F  FEE": "Sunnyside Daycare",
-    "Little Explorers Day  FEE": "Little Explorers Daycare",
+    "GOODLIFE CLUBS  #2214": "GoodLife Fitness",
+    "MAPLE TRUST INS/ASSUR INS": "Maple Trust Insurance",
+    "Sunnybrook Daycare  FEE": "Sunnybrook Daycare",
+    "Little Pines Day  FEE": "Little Pines Daycare",
     "MAPLE TRUST MORTGAGE": "Maple Trust Mortgage",
 }
 
@@ -217,7 +222,7 @@ RULES: list[dict[str, Any]] = [
     {"id": "r28", "matcher": {"kind": "contains", "value": "MCDONALD"},         "categoryId": "dining",          "order": 28},
     {"id": "r29", "matcher": {"kind": "contains", "value": "BOSTON PIZZA"},     "categoryId": "dining",          "order": 29},
     {"id": "r30", "matcher": {"kind": "contains", "value": "PIZZA HUT"},        "categoryId": "dining",          "order": 30},
-    {"id": "r31", "matcher": {"kind": "contains", "value": "CAFECO"},           "categoryId": "dining",          "order": 31},
+    {"id": "r31", "matcher": {"kind": "contains", "value": "CAFETERIA"},           "categoryId": "dining",          "order": 31},
     {"id": "r32", "matcher": {"kind": "contains", "value": "PETRO-CANADA"},     "categoryId": "transportation",  "order": 32},
     {"id": "r33", "matcher": {"kind": "contains", "value": "ESSO"},             "categoryId": "transportation",  "order": 33},
     {"id": "r34", "matcher": {"kind": "contains", "value": "SHELL"},            "categoryId": "transportation",  "order": 34},
@@ -343,10 +348,10 @@ def gen_income_for_month(year: int, month: int, rng: random.Random, counter: lis
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=d,
-            account_id="avery_chequing",
+            account_id="chequing_1",
             raw_merchant="PAYROLL DEP NORTHWIND",
-            amount=4650 + rng.uniform(-60, 60),
-            person_id="avery",
+            amount=3900 + rng.uniform(-60, 60),
+            person_id="p_adult1",
         ))
 
     # Jordan biweekly salary into her chequing — 14th & 28th-ish
@@ -356,10 +361,10 @@ def gen_income_for_month(year: int, month: int, rng: random.Random, counter: lis
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=d,
-            account_id="jordan_chequing",
-            raw_merchant="PAYROLL DEP MERIDIAN HEALTH",
-            amount=2750 + rng.uniform(-40, 40),
-            person_id="jordan",
+            account_id="chequing_2",
+            raw_merchant="PAYROLL DEP CEDARCARE",
+            amount=2300 + rng.uniform(-40, 40),
+            person_id="p_adult2",
         ))
 
     # CCB into joint savings on the 20th
@@ -367,10 +372,10 @@ def gen_income_for_month(year: int, month: int, rng: random.Random, counter: lis
     txs.append(make_tx(
         txid=f"t{counter[0]}",
         d=date(year, month, 20),
-        account_id="joint_savings",
+        account_id="savings_joint",
         raw_merchant="CCB DEPOSIT CANADA",
-        amount=556.42,
-        person_id="jordan",
+        amount=512.75,
+        person_id="p_adult2",
     ))
 
     # Tax refund — once a year in April
@@ -379,15 +384,15 @@ def gen_income_for_month(year: int, month: int, rng: random.Random, counter: lis
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, 4, 22),
-            account_id="avery_chequing",
+            account_id="chequing_1",
             raw_merchant="CRA TAX REFUND",
-            amount=2480.00,
-            person_id="avery",
+            amount=1935.00,
+            person_id="p_adult1",
         ))
 
     # Quarterly interest credits on savings
     if month in (3, 6, 9, 12):
-        for acc, amt in [("avery_savings", 38.20), ("joint_savings", 92.55)]:
+        for acc, amt in [("savings_1", 31.40), ("savings_joint", 74.20)]:
             counter[0] += 1
             txs.append(make_tx(
                 txid=f"t{counter[0]}",
@@ -404,28 +409,28 @@ def gen_income_for_month(year: int, month: int, rng: random.Random, counter: lis
 # Distributed across both adults' chequing accounts so neither one goes negative.
 RECURRING_BANK: list[dict[str, Any]] = [
     # Avery's chequing pays the mortgage + most utilities + his subscriptions
-    {"day": 1,  "account": "avery_chequing", "merchant": "MAPLE TRUST MORTGAGE",            "amount": 2496.10},
-    {"day": 5,  "account": "avery_chequing", "merchant": "ENBRIDGE GAS",           "amount": 88.40},
-    {"day": 6,  "account": "avery_chequing", "merchant": "HYDRO ONE",              "amount": 152.10},
-    {"day": 8,  "account": "avery_chequing", "merchant": "ROGERS COMMUNICATIONS",  "amount": 102.99},
-    {"day": 9,  "account": "avery_chequing", "merchant": "BELL CANADA",            "amount": 78.50},
-    {"day": 12, "account": "avery_chequing", "merchant": "Maple Trust Assur  INS",   "amount": 169.86},
-    {"day": 3,  "account": "avery_chequing", "merchant": "GOODLIFE CLUBS   MSP",   "amount": 63.69},
+    {"day": 1,  "account": "chequing_1", "merchant": "MAPLE TRUST MORTGAGE",     "amount": 2185.00},
+    {"day": 5,  "account": "chequing_1", "merchant": "ENBRIDGE GAS",             "amount": 74.25},
+    {"day": 6,  "account": "chequing_1", "merchant": "HYDRO ONE",                "amount": 138.60},
+    {"day": 8,  "account": "chequing_1", "merchant": "ROGERS COMMUNICATIONS",    "amount": 96.99},
+    {"day": 9,  "account": "chequing_1", "merchant": "BELL CANADA",              "amount": 71.25},
+    {"day": 12, "account": "chequing_1", "merchant": "MAPLE TRUST INS/ASSUR INS","amount": 154.20},
+    {"day": 3,  "account": "chequing_1", "merchant": "GOODLIFE CLUBS  #2214",    "amount": 58.99},
     # Jordan's chequing pays daycare (both kids), home insurance, second cell line
-    {"day": 2,  "account": "jordan_chequing", "merchant": "Sunnyside Daycare F  FEE",   "amount": 1395.00},
-    {"day": 2,  "account": "jordan_chequing", "merchant": "Little Explorers Day  FEE",  "amount": 1450.00},
-    {"day": 14, "account": "jordan_chequing", "merchant": "INTACT INSURANCE HOME",  "amount": 121.00},
-    {"day": 10, "account": "jordan_chequing", "merchant": "TELUS MOBILITY",         "amount": 65.00},
+    {"day": 2,  "account": "chequing_2", "merchant": "Sunnybrook Daycare  FEE",  "amount": 1180.00},
+    {"day": 2,  "account": "chequing_2", "merchant": "Little Pines Day  FEE",    "amount": 1225.00},
+    {"day": 14, "account": "chequing_2", "merchant": "INTACT INSURANCE HOME",    "amount": 108.50},
+    {"day": 10, "account": "chequing_2", "merchant": "TELUS MOBILITY",           "amount": 58.00},
 ]
 
 # Recurring monthly subscriptions billed to credit cards
 RECURRING_CC_SUBS: list[dict[str, Any]] = [
-    {"day": 4,  "account": "avery_summit_rewards", "merchant": "NETFLIX.COM",          "amount": 19.99},
-    {"day": 7,  "account": "avery_summit_rewards", "merchant": "DISNEY PLUS",          "amount": 16.79},
-    {"day": 11, "account": "avery_summit_rewards", "merchant": "CRAVE",                "amount": 19.99},
-    {"day": 14, "account": "avery_summit_rewards", "merchant": "SPOTIFY P0J0PXVN",     "amount": 12.99},
-    {"day": 18, "account": "avery_td_visa",     "merchant": "AMZN PRIME CA*XD9",    "amount": 10.49},
-    {"day": 22, "account": "avery_td_visa",     "merchant": "APPLE.COM/BILL ICLOUD","amount":  3.99},
+    {"day": 4,  "account": "cc_rewards_1", "merchant": "NETFLIX.COM",          "amount": 19.99},
+    {"day": 7,  "account": "cc_rewards_1", "merchant": "DISNEY PLUS",          "amount": 16.79},
+    {"day": 11, "account": "cc_rewards_1", "merchant": "CRAVE",                "amount": 19.99},
+    {"day": 14, "account": "cc_rewards_1", "merchant": "SPOTIFY R4T7QWZ2",     "amount": 12.99},
+    {"day": 18, "account": "cc_visa_1",     "merchant": "AMZN PRIME CA*KT4",    "amount": 10.49},
+    {"day": 22, "account": "cc_visa_1",     "merchant": "APPLE.COM/BILL ICLOUD","amount":  3.99},
 ]
 
 
@@ -458,9 +463,9 @@ def gen_recurring_for_month(year: int, month: int, rng: random.Random, counter: 
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, 15),
-            account_id="avery_chequing",
+            account_id="chequing_1",
             raw_merchant="PROPERTY TAX CITY",
-            amount=-1180.00,
+            amount=-995.00,
         ))
     return txs
 
@@ -478,7 +483,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
             txs.append(make_tx(
                 txid=f"t{counter[0]}",
                 d=d,
-                account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+                account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
                 raw_merchant=rng.choice(MERCHANTS["groceries"]),
                 amount=-round(rng.uniform(140, 240), 2),
             ))
@@ -487,7 +492,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
             txs.append(make_tx(
                 txid=f"t{counter[0]}",
                 d=d,
-                account_id=rng.choice(["avery_td_visa", "jordan_harbour_avion"]),
+                account_id=rng.choice(["cc_visa_1", "cc_travel_2"]),
                 raw_merchant=rng.choice(MERCHANTS["groceries"]),
                 amount=-round(rng.uniform(40, 90), 2),
             ))
@@ -499,7 +504,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_td_visa", "avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_visa_1", "cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["transportation"]),
             amount=-round(rng.uniform(55, 95), 2),
         ))
@@ -512,7 +517,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_td_visa", "avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_visa_1", "cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["dining"]),
             amount=-round(rng.uniform(6, 65), 2),
         ))
@@ -524,7 +529,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["shopping"]),
             amount=-round(rng.uniform(15, 280), 2),
         ))
@@ -536,7 +541,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["kids"]),
             amount=-round(rng.uniform(25, 120), 2),
         ))
@@ -548,7 +553,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["entertainment"]),
             amount=-round(rng.uniform(20, 90), 2),
         ))
@@ -560,7 +565,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["personal_care"]),
             amount=-round(rng.uniform(20, 85), 2),
         ))
@@ -572,7 +577,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, day),
-            account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+            account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
             raw_merchant=rng.choice(MERCHANTS["healthcare"]),
             amount=-round(rng.uniform(15, 130), 2),
         ))
@@ -583,7 +588,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
         txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=date(year, month, rng.randint(5, 20)),
-            account_id="avery_summit_rewards",
+            account_id="cc_rewards_1",
             raw_merchant=rng.choice(MERCHANTS["travel"]),
             amount=-round(rng.uniform(800, 2200), 2),
         ))
@@ -595,7 +600,7 @@ def gen_variable_for_month(year: int, month: int, rng: random.Random, counter: l
             txs.append(make_tx(
                 txid=f"t{counter[0]}",
                 d=date(year, month, day),
-                account_id=rng.choice(["avery_summit_rewards", "jordan_harbour_avion"]),
+                account_id=rng.choice(["cc_rewards_1", "cc_travel_2"]),
                 raw_merchant=rng.choice(MERCHANTS["gifts"]),
                 amount=-round(rng.uniform(40, 250), 2),
             ))
@@ -626,7 +631,7 @@ def gen_cc_payments_for_month(
         payments.append(make_tx(
             txid=f"t{counter[0]}",
             d=pay_day,
-            account_id="avery_chequing" if cc_id != "jordan_harbour_avion" else "jordan_chequing",
+            account_id="chequing_1" if cc_id != "cc_travel_2" else "chequing_2",
             raw_merchant=f"CC PAYMENT {cc_id.upper()}",
             amount=-amount,
             is_transfer=True,
@@ -650,15 +655,15 @@ def gen_cc_payments_for_month(
 
 CONTRIBUTION_PLAN: list[dict[str, Any]] = [
     # account_id, person_id, kind, monthly_amount, start_day
-    {"accountId": "ws_tfsa_avery", "personId": "avery", "kind": "tfsa", "monthly": 300, "day": 16},
-    {"accountId": "qt_tfsa_avery", "personId": "avery", "kind": "tfsa", "monthly": 200, "day": 17},
-    {"accountId": "northline_tfsa_jordan", "personId": "jordan", "kind": "tfsa", "monthly": 250, "day": 16},
-    {"accountId": "qt_rrsp_avery", "personId": "avery", "kind": "rrsp", "monthly": 200, "day": 18},
-    {"accountId": "northline_rrsp_jordan", "personId": "jordan", "kind": "rrsp", "monthly": 150, "day": 19},
-    {"accountId": "qt_resp_kid1",   "personId": "avery", "kind": "resp", "monthly": 208, "day": 20, "beneficiaryId": "kid1"},
-    {"accountId": "qt_resp_kid2",   "personId": "avery", "kind": "resp", "monthly": 208, "day": 20, "beneficiaryId": "kid2"},
-    {"accountId": "ws_fhsa_avery", "personId": "avery", "kind": "fhsa", "monthly": 200, "day": 21},
-    {"accountId": "ws_fhsa_jordan", "personId": "jordan", "kind": "fhsa", "monthly": 200, "day": 21},
+    {"accountId": "tfsa_1", "personId": "p_adult1", "kind": "tfsa", "monthly": 250, "day": 16},
+    {"accountId": "tfsa_2", "personId": "p_adult1", "kind": "tfsa", "monthly": 175, "day": 17},
+    {"accountId": "tfsa_4", "personId": "p_adult2", "kind": "tfsa", "monthly": 225, "day": 16},
+    {"accountId": "rrsp_1", "personId": "p_adult1", "kind": "rrsp", "monthly": 180, "day": 18},
+    {"accountId": "rrsp_2", "personId": "p_adult2", "kind": "rrsp", "monthly": 140, "day": 19},
+    {"accountId": "resp_1",   "personId": "p_adult1", "kind": "resp", "monthly": 208, "day": 20, "beneficiaryId": "p_child1"},
+    {"accountId": "resp_2",   "personId": "p_adult1", "kind": "resp", "monthly": 208, "day": 20, "beneficiaryId": "p_child2"},
+    {"accountId": "fhsa_1", "personId": "p_adult1", "kind": "fhsa", "monthly": 150, "day": 21},
+    {"accountId": "fhsa_2", "personId": "p_adult2", "kind": "fhsa", "monthly": 150, "day": 21},
 ]
 
 
@@ -687,7 +692,7 @@ def gen_contributions_for_month(
         contributions.append(ev)
 
         # Bank outflow (contribution leaves chequing)
-        from_acc = "avery_chequing" if plan["personId"] == "avery" else "jordan_chequing"
+        from_acc = "chequing_1" if plan["personId"] == "p_adult1" else "chequing_2"
         counter[0] += 1
         bank_txs.append(make_tx(
             txid=f"t{counter[0]}",
@@ -720,9 +725,9 @@ def gen_contributions_for_month(
         ev = {
             "id": f"c{counter[0]}",
             "date": iso(d),
-            "accountId": "qt_rrsp_avery",
-            "personId": "avery",
-            "amount": 4000,
+            "accountId": "rrsp_1",
+            "personId": "p_adult1",
+            "amount": 3500,
             "kind": "rrsp",
         }
         contributions.append(ev)
@@ -730,10 +735,10 @@ def gen_contributions_for_month(
         bank_txs.append(make_tx(
             txid=f"t{counter[0]}",
             d=d,
-            account_id="avery_chequing",
+            account_id="chequing_1",
             raw_merchant="E-TFR CONTRIB RRSP LUMP",
-            amount=-4000,
-            person_id="avery",
+            amount=-3500,
+            person_id="p_adult1",
             is_transfer=True,
         ))
 
@@ -743,9 +748,9 @@ def gen_contributions_for_month(
     contributions.append({
         "id": f"c{counter[0]}",
         "date": iso(d),
-        "accountId": "sl_dccp_avery",
-        "personId": "avery",
-        "amount": 750,
+        "accountId": "dcpp_1",
+        "personId": "p_adult1",
+        "amount": 640,
         "kind": "rrsp",
     })
 
@@ -755,33 +760,33 @@ def gen_contributions_for_month(
 # Investment account growth model
 INV_GROWTH: dict[str, tuple[float, float]] = {
     # account_id: (mean monthly return, sd)
-    "ws_tfsa_avery":   (0.007, 0.025),
-    "ws_crypto_avery": (0.012, 0.10),
-    "qt_tfsa_avery":   (0.007, 0.025),
-    "qt_rrsp_avery":   (0.006, 0.022),
-    "qt_resp_kid1":     (0.005, 0.020),
-    "qt_resp_kid2":     (0.005, 0.020),
-    "northline_tfsa_avery":   (0.006, 0.022),
-    "sl_dccp_avery":   (0.005, 0.018),
-    "northline_tfsa_jordan":   (0.007, 0.024),
-    "northline_rrsp_jordan":   (0.006, 0.022),
-    "ws_fhsa_avery":   (0.006, 0.020),
-    "ws_fhsa_jordan":   (0.006, 0.020),
+    "tfsa_1":   (0.007, 0.025),
+    "crypto_1": (0.012, 0.10),
+    "tfsa_2":   (0.007, 0.025),
+    "rrsp_1":   (0.006, 0.022),
+    "resp_1":     (0.005, 0.020),
+    "resp_2":     (0.005, 0.020),
+    "tfsa_3":   (0.006, 0.022),
+    "dcpp_1":   (0.005, 0.018),
+    "tfsa_4":   (0.007, 0.024),
+    "rrsp_2":   (0.006, 0.022),
+    "fhsa_1":   (0.006, 0.020),
+    "fhsa_2":   (0.006, 0.020),
 }
 
 INV_STARTING_VALUES: dict[str, float] = {
-    "ws_tfsa_avery":   7500,
-    "ws_crypto_avery": 5800,
-    "qt_tfsa_avery":  18000,
-    "qt_rrsp_avery":  22000,
-    "qt_resp_kid1":     4500,
-    "qt_resp_kid2":     2800,
-    "northline_tfsa_avery":   6000,
-    "sl_dccp_avery": 155000,
-    "northline_tfsa_jordan":   5800,
-    "northline_rrsp_jordan":   7500,
-    "ws_fhsa_avery":   3800,
-    "ws_fhsa_jordan":   4900,
+    "tfsa_1":    6200,
+    "crypto_1":  4100,
+    "tfsa_2":   15400,
+    "rrsp_1":   19700,
+    "resp_1":    3900,
+    "resp_2":    2350,
+    "tfsa_3":    5100,
+    "dcpp_1":  128000,
+    "tfsa_4":    4700,
+    "rrsp_2":    6300,
+    "fhsa_1":    3100,
+    "fhsa_2":    4200,
 }
 
 
@@ -806,13 +811,13 @@ def step_investments(
 # ---------------------------------------------------------------------------
 
 OPENING_BALANCES: dict[str, float] = {
-    "avery_chequing": 14500.00,
-    "avery_savings": 22500.00,
-    "jordan_chequing": 9800.00,
-    "joint_savings": 47800.00,
-    "avery_td_visa": 0.00,
-    "avery_summit_rewards": 0.00,
-    "jordan_harbour_avion": 0.00,
+    "chequing_1": 11250.00,
+    "savings_1": 18400.00,
+    "chequing_2": 7650.00,
+    "savings_joint": 35200.00,
+    "cc_visa_1": 0.00,
+    "cc_rewards_1": 0.00,
+    "cc_travel_2": 0.00,
 }
 
 
@@ -864,7 +869,7 @@ def write_bank_csv(transactions: list[dict[str, Any]], path: Path) -> None:
 
 
 def write_credit_card_csv(transactions: list[dict[str, Any]], path: Path) -> None:
-    cc_account_ids = {a["id"] for a in ACCOUNTS if a["kind"] == "credit_card"}
+    cc_account_ids = [a["id"] for a in ACCOUNTS if a["kind"] == "credit_card"]
     rows = [t for t in transactions if t["accountId"] in cc_account_ids]
     rows.sort(key=lambda t: (t["accountId"], t["date"], t["id"]), reverse=True)
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -970,7 +975,7 @@ def generate(seed: int, num_months: int, today: date) -> dict[str, Any]:
 
         # Compute end-of-month CC balances for next month's payment.
         # End balance = start balance + charges - payments (clamped at zero).
-        cc_account_ids = {a["id"] for a in ACCOUNTS if a["kind"] == "credit_card"}
+        cc_account_ids = [a["id"] for a in ACCOUNTS if a["kind"] == "credit_card"]
         new_cc_balances: dict[str, float] = {}
         for cc in cc_account_ids:
             charges = sum(-t["amount"] for t in month_txs if t["accountId"] == cc and t["amount"] < 0)
@@ -1030,9 +1035,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42, help="RNG seed (default 42).")
     p.add_argument("--months", type=int, default=12, help="Number of months to generate (default 12).")
     p.add_argument("--out", type=Path, default=Path("mock/out"), help="Output directory.")
-    p.add_argument("--frontend-data", type=Path, default=Path("frontend/src/data"),
-                   help="Also write fixtures.json into this frontend data dir.")
-    p.add_argument("--today", type=str, default=None, help="Override today's date (YYYY-MM-DD).")
+    p.add_argument("--frontend-data", type=Path, default=None,
+                   help="Optionally also write fixtures.json into a frontend data dir.")
+    p.add_argument("--today", type=str, default=DEFAULT_TODAY,
+                   help=f"Anchor date for the 12-month window (default {DEFAULT_TODAY}).")
     return p.parse_args()
 
 

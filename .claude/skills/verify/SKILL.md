@@ -18,13 +18,24 @@ uv run uvicorn app.main:app --port 8000 # run in background
 npm run dev                             # http://localhost:5173, run in background
 ```
 
+**Don't seed or wipe the real DB to test something.** `DEEPPOCKET_DB` points the backend at any
+file, so demo data and schema rebuilds go to a throwaway copy and the user's own imported data
+is never touched:
+
+```bash
+DEEPPOCKET_DB=/tmp/demo.db uv run seed.py
+DEEPPOCKET_DB=/tmp/demo.db uv run uvicorn app.main:app --port 8000
+```
+
 Wait ~4s, then sanity-check both: `curl -s http://localhost:8000/api/data` (JSON payload)
 and `curl -s -o /dev/null -w "%{http_code}" http://localhost:5173` (200).
 
 ## Gotchas
 
-- **Schema changes need a DB rebuild**: no migrations — `rm backend/deeppocket.db && uv run seed.py`.
-  The backend test suite uses an isolated in-memory DB and is unaffected.
+- **Schema changes**: new *tables* appear automatically (`create_all`), but new *columns* do not —
+  add a PRAGMA-guarded `ALTER TABLE` to `init_db()` (see `backend/app/db.py`) so an existing
+  database upgrades in place. Rebuilding from scratch is a last resort, and when you do, rebuild a
+  `DEEPPOCKET_DB` copy rather than the real file. The test suite uses an isolated in-memory DB.
 - Since M3 the `/api/data` payload is composed **entirely from SQLite** — `fixtures.json`
   is seed input only (`uv run seed.py`), so a stale DB (not the fixtures file) explains odd data.
 - First page load shows "Loading fixtures…" briefly; take a fresh `browser_snapshot` if the

@@ -6,8 +6,8 @@ import { MultiSelect } from '../MultiSelect';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const options = [
-  { id: 'p1', label: 'Jordan' },
-  { id: 'p2', label: 'Avery' },
+  { id: 'p1', label: 'Avery' },
+  { id: 'p2', label: 'Jordan' },
 ];
 
 let container: HTMLDivElement | null = null;
@@ -39,17 +39,17 @@ describe('MultiSelect', () => {
 
   it('renders the joined labels when ids are selected', () => {
     render(<MultiSelect options={options} selected={['p1', 'p2']} onChange={() => {}} />);
-    expect(trigger().textContent).toBe('Jordan, Avery');
+    expect(trigger().textContent).toBe('Avery, Jordan');
   });
 
   it('sorts the joined labels alphabetically regardless of options order', () => {
     // Keeps the trigger label consistent with the sorted computed account name.
     const unsorted = [
-      { id: 'p2', label: 'Avery' },
-      { id: 'p1', label: 'Jordan' },
+      { id: 'p2', label: 'Jordan' },
+      { id: 'p1', label: 'Avery' },
     ];
     render(<MultiSelect options={unsorted} selected={['p2', 'p1']} onChange={() => {}} />);
-    expect(trigger().textContent).toBe('Jordan, Avery');
+    expect(trigger().textContent).toBe('Avery, Jordan');
   });
 
   it('opening the popover and clicking an unchecked option fires onChange with the id ADDED', () => {
@@ -60,7 +60,7 @@ describe('MultiSelect', () => {
     act(() => trigger().click());
     const boxes = container!.querySelectorAll('input[type="checkbox"]');
     expect(boxes.length).toBe(2);
-    // click the unchecked "Avery" (p2)
+    // click the unchecked "Jordan" (p2)
     act(() => (boxes[1] as HTMLInputElement).click());
     expect(onChange).toHaveBeenCalledWith(['p1', 'p2']);
   });
@@ -70,7 +70,7 @@ describe('MultiSelect', () => {
     render(<MultiSelect options={options} selected={['p1', 'p2']} onChange={onChange} />);
     act(() => trigger().click());
     const boxes = container!.querySelectorAll('input[type="checkbox"]');
-    // click the checked "Jordan" (p1)
+    // click the checked "Avery" (p1)
     act(() => (boxes[0] as HTMLInputElement).click());
     expect(onChange).toHaveBeenCalledWith(['p2']);
   });

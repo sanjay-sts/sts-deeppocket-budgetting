@@ -24,8 +24,8 @@ interface AppState {
   previewTransactionsCsv: (file: File) => Promise<import('../data/api').CsvPreview>;
   importTransactionsMapped: (file: File, mapping: import('../data/api').CsvMapping) => Promise<import('../data/api').TxImportSummary>;
   refetch: () => Promise<void>;
-  addPerson: (b: { name: string; role: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
-  editPerson: (id: string, b: { name?: string; role?: 'adult' | 'child'; birthYear?: number }) => Promise<void>;
+  addPerson: (b: import('../data/api').PersonInput) => Promise<void>;
+  editPerson: (id: string, b: Partial<import('../data/api').PersonInput>) => Promise<void>;
   removePerson: (id: string, cascade?: boolean) => Promise<void>;
   addAccount: (b: { personIds: string[]; institution: string; accountType: string; kind?: string; name?: string; beneficiaryIds?: string[] }) => Promise<void>;
   editAccount: (id: string, b: Record<string, unknown>) => Promise<void>;

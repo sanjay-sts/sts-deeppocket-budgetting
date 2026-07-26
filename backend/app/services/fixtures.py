@@ -13,6 +13,8 @@ def _person_out(p: Person) -> dict:
     out = {"id": p.id, "name": p.name, "role": p.role}
     if p.birth_year is not None:
         out["birthYear"] = p.birth_year
+    if p.gross_income is not None:
+        out["grossIncome"] = p.gross_income
     return out
 
 

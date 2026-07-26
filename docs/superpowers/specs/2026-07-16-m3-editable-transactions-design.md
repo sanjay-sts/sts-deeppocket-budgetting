@@ -128,7 +128,7 @@ New tables (editable in **bold**):
 
 **Seeding.** `seed.py` (and `purge mode=demo`) ingest the full `fixtures.json`: 7 bank
 accounts (owners via the existing `AccountOwner` join table; `is_liability=True` for
-credit cards; fixture account IDs like `avery_chequing` kept verbatim — the sample CSVs
+credit cards; fixture account IDs like `chequing_1` kept verbatim — the sample CSVs
 reference them), 864 transactions, 30 categories, budget lines/config, app meta.
 `purge mode=all` wipes the new tables too; `mode=investments` is unchanged (banking data
 survives). The rules table starts **empty** — seeded transactions are already categorized,

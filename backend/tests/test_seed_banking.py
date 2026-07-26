@@ -24,16 +24,16 @@ def test_seed_populates_banking_domain(session):
 
 def test_seed_bank_accounts_keep_ids_names_and_opening_balances(session):
     seed(session)
-    acc = session.get(Account, "avery_chequing")
+    acc = session.get(Account, "chequing_1")
     assert acc is not None and acc.kind == "chequing"
-    assert acc.opening_balance == 14500.0
+    assert acc.opening_balance == 11250.0
     # custom_name preserves the fixture display name so screens render identically.
     assert acc.custom_name == "Maple Trust Chequing (Avery)"
     owners = session.exec(
-        select(AccountOwner).where(AccountOwner.account_id == "avery_chequing")
+        select(AccountOwner).where(AccountOwner.account_id == "chequing_1")
     ).all()
-    assert [o.person_id for o in owners] == ["avery"]
-    visa = session.get(Account, "avery_td_visa")
+    assert [o.person_id for o in owners] == ["p_adult1"]
+    visa = session.get(Account, "cc_visa_1")
     assert visa.is_liability is True
 
 
@@ -51,7 +51,7 @@ def test_seed_is_idempotent(session):
 def test_investments_empty_keeps_banking(session):
     seed(session)
     seed(session, investments="empty")
-    assert session.get(Account, "avery_chequing") is not None
+    assert session.get(Account, "chequing_1") is not None
     assert len(session.exec(select(Transaction)).all()) > 0
     inv = [a for a in session.exec(select(Account)).all() if a.kind not in BANK_KINDS]
     assert inv == []

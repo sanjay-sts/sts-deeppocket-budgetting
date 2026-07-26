@@ -19,15 +19,15 @@ def test_payload_is_composed_entirely_from_db(session):
     assert set(payload.keys()) == EXPECTED_KEYS
     assert len(payload["transactions"]) == 864
     assert payload["craLimits"]["TFSA_ANNUAL"] == 7000
-    assert payload["meta"]["openingBalances"]["avery_chequing"] == 14500.0
+    assert payload["meta"]["openingBalances"]["chequing_1"] == 11250.0
     assert payload["meta"]["seed"] == 42
     assert payload["budget"]["mode"] == "envelope"
     tx = next(t for t in payload["transactions"] if t["id"] == "t1")
     assert tx == {
-        "id": "t1", "date": "2025-05-15", "accountId": "avery_chequing",
+        "id": "t1", "date": "2025-05-15", "accountId": "chequing_1",
         "rawMerchant": "PAYROLL DEP NORTHWIND", "merchant": "Payroll Dep Northwind",
-        "amount": 4666.73, "categoryId": "salary", "personId": "avery",
-        "runningTotal": 16015.09, "source": "bank",
+        "amount": 3916.73, "categoryId": "salary", "personId": "p_adult1",
+        "runningTotal": 12387.45, "source": "bank",
     }
 
 
@@ -36,9 +36,9 @@ def test_payload_accounts_include_bank_and_investment(session):
     payload = build_payload(session)
     kinds = {a["kind"] for a in payload["accounts"]}
     assert "chequing" in kinds and "credit_card" in kinds
-    chequing = next(a for a in payload["accounts"] if a["id"] == "avery_chequing")
+    chequing = next(a for a in payload["accounts"] if a["id"] == "chequing_1")
     assert chequing["name"] == "Maple Trust Chequing (Avery)"
-    visa = next(a for a in payload["accounts"] if a["id"] == "avery_td_visa")
+    visa = next(a for a in payload["accounts"] if a["id"] == "cc_visa_1")
     assert visa["isLiability"] is True
 
 

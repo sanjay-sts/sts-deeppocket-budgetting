@@ -10,10 +10,14 @@ def init_db() -> None:
     # create_all adds missing tables but never missing columns; patch the ones we've
     # added to existing tables so a live DB upgrades in place without a reseed.
     with engine.connect() as conn:
-        cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(contribution)")]
-        if cols and "recurring_id" not in cols:
-            conn.exec_driver_sql("ALTER TABLE contribution ADD COLUMN recurring_id VARCHAR")
-            conn.commit()
+        for table, column, ddl in (
+            ("contribution", "recurring_id", "ALTER TABLE contribution ADD COLUMN recurring_id VARCHAR"),
+            ("person", "gross_income", "ALTER TABLE person ADD COLUMN gross_income FLOAT"),
+        ):
+            cols = [r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})")]
+            if cols and column not in cols:
+                conn.exec_driver_sql(ddl)
+        conn.commit()
 
 
 def get_session():

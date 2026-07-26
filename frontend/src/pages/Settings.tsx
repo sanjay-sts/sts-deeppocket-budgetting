@@ -7,55 +7,143 @@ import { Tabs } from '../components/ui/Tabs';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { autoName } from '../lib/account';
-import type { BudgetMode, CategoryGroup, Bucket503020 } from '../types';
+import { cad } from '../lib/format';
+import { errorMessage } from '../data/api';
+import type { BudgetMode, CategoryGroup, Bucket503020, Person, PersonRole } from '../types';
 
+const FIELD = 'w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand';
+
+// Household roster (issue #23). Income is what makes RRSP room and the refund estimate
+// real, and marking someone a child is what lets CESG track their RESP grants — so both
+// are editable here, including for people the CSV importer created as adults.
 function HouseholdSection() {
   const household = useAppStore((s) => s.fixtures?.household ?? []);
   const addPerson = useAppStore((s) => s.addPerson);
+  const editPerson = useAppStore((s) => s.editPerson);
   const removePerson = useAppStore((s) => s.removePerson);
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'adult' | 'child'>('adult');
+  const [role, setRole] = useState<PersonRole>('adult');
   const [birthYear, setBirthYear] = useState('');
+  const [grossIncome, setGrossIncome] = useState('');
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ name: '', role: 'adult' as PersonRole, birthYear: '', grossIncome: '' });
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const pendingPerson = household.find((p) => p.id === pendingDelete) ?? null;
 
   async function submit() {
     setError('');
     try {
-      await addPerson({ name, role, birthYear: birthYear ? Number(birthYear) : undefined });
-      setName(''); setBirthYear('');
+      await addPerson({
+        name, role,
+        birthYear: birthYear ? Number(birthYear) : undefined,
+        grossIncome: role === 'adult' && grossIncome !== '' ? Number(grossIncome) : undefined,
+      });
+      setName(''); setBirthYear(''); setGrossIncome('');
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
+    }
+  }
+
+  function startEdit(p: Person) {
+    setError('');
+    setEditingId(p.id);
+    setDraft({
+      name: p.name,
+      role: p.role,
+      birthYear: p.birthYear ? String(p.birthYear) : '',
+      grossIncome: p.grossIncome === undefined ? '' : String(p.grossIncome),
+    });
+  }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    setError('');
+    // '' clears the recorded income and a child never carries one; 0 stays a real answer,
+    // so this cannot collapse to a falsy check.
+    let income: number | null = null;
+    if (draft.role === 'adult' && draft.grossIncome !== '') {
+      income = Number(draft.grossIncome);
+      if (!Number.isFinite(income) || income < 0) {
+        setError('Income must be a number of dollars, or blank.');
+        return;
+      }
+    }
+    try {
+      await editPerson(editingId, {
+        name: draft.name,
+        role: draft.role,
+        birthYear: draft.birthYear ? Number(draft.birthYear) : undefined,
+        grossIncome: income,
+      });
+      setEditingId(null);
+    } catch (e) {
+      setError(errorMessage(e));
     }
   }
 
   return (
-    <Card>
-      <h2 className="text-lg font-semibold text-ink mb-3">Household</h2>
+    <Card title="Household" subtitle="Who the money belongs to — income drives RRSP room, children unlock CESG tracking">
       <table className="w-full text-sm mb-3 table-fixed">
-        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3 w-2/5">Name</th><th className="py-1 pr-3 w-1/5">Role</th><th className="py-1 pr-3 w-1/5">Birth year</th><th className="w-1/5"></th></tr></thead>
+        <thead><tr className="text-left text-xs text-ink-dim uppercase tracking-wider"><th className="py-1 pr-3 w-1/4">Name</th><th className="py-1 pr-3 w-[15%]">Role</th><th className="py-1 pr-3 w-[15%]">Birth year</th><th className="py-1 pr-3 w-1/5">Income</th><th className="w-1/4"></th></tr></thead>
         <tbody className="divide-y divide-line">
           {household.map((p) => (
-            <tr key={p.id} className="border-t border-line">
-              <td className="py-1.5 pr-3 text-ink">{p.name}</td><td className="py-1.5 pr-3 text-ink-muted">{p.role}</td><td className="py-1.5 pr-3 text-ink-muted">{p.birthYear ?? '—'}</td>
-              <td className="text-right">
-                <button className="text-down" onClick={() => setPendingDelete(p.id)}>Remove</button>
-              </td>
-            </tr>
+            editingId === p.id ? (
+              <tr key={p.id} className="border-t border-line">
+                <td className="py-1.5 pr-3">
+                  <input className={FIELD} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                </td>
+                <td className="py-1.5 pr-3">
+                  <select className={FIELD} value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as PersonRole })}>
+                    <option value="adult">adult</option>
+                    <option value="child">child</option>
+                  </select>
+                </td>
+                <td className="py-1.5 pr-3">
+                  <input type="number" className={FIELD} placeholder="—" value={draft.birthYear} onChange={(e) => setDraft({ ...draft, birthYear: e.target.value })} />
+                </td>
+                <td className="py-1.5 pr-3">
+                  <input type="number" min="0" step="1000" className={FIELD} placeholder={draft.role === 'adult' ? '—' : 'n/a'} value={draft.role === 'adult' ? draft.grossIncome : ''} disabled={draft.role === 'child'} onChange={(e) => setDraft({ ...draft, grossIncome: e.target.value })} />
+                </td>
+                <td className="text-right whitespace-nowrap">
+                  <Button onClick={saveEdit} disabled={!draft.name}>Save</Button>
+                  <button className="text-ink-muted hover:text-ink ml-3" onClick={() => setEditingId(null)}>Cancel</button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={p.id} className="border-t border-line">
+                <td className="py-1.5 pr-3 text-ink">{p.name}</td>
+                <td className="py-1.5 pr-3"><Badge tone={p.role === 'adult' ? 'info' : 'positive'}>{p.role}</Badge></td>
+                <td className="py-1.5 pr-3 text-ink-muted">{p.birthYear ?? '—'}</td>
+                <td className="py-1.5 pr-3 num text-ink-muted">
+                  {p.role === 'child'
+                    ? '—'
+                    : p.grossIncome === undefined
+                      ? <span className="text-ink-dim">not set</span>
+                      : cad(p.grossIncome, true)}
+                </td>
+                <td className="text-right whitespace-nowrap">
+                  <button className="text-ink-muted hover:text-ink" onClick={() => startEdit(p)}>Edit</button>
+                  <button className="text-down ml-3" onClick={() => setPendingDelete(p.id)}>Remove</button>
+                </td>
+              </tr>
+            )
           ))}
           <tr className="border-t border-line">
             <td className="pt-2 pr-3">
-              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+              <input className={FIELD} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
             </td>
             <td className="pt-2 pr-3">
-              <select className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={role} onChange={(e) => setRole(e.target.value as 'adult' | 'child')}>
+              <select className={FIELD} value={role} onChange={(e) => setRole(e.target.value as PersonRole)}>
                 <option value="adult">adult</option>
                 <option value="child">child</option>
               </select>
             </td>
             <td className="pt-2 pr-3">
-              <input className="w-full bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
+              <input type="number" className={FIELD} placeholder="Birth year" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
+            </td>
+            <td className="pt-2 pr-3">
+              <input type="number" min="0" step="1000" className={FIELD} placeholder={role === 'adult' ? 'Income' : '—'} value={grossIncome} disabled={role === 'child'} onChange={(e) => setGrossIncome(e.target.value)} />
             </td>
             <td className="pt-2 text-right align-bottom">
               <Button onClick={submit} disabled={!name}>Add member</Button>
@@ -632,22 +720,6 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
-      <Card title="Household" subtitle="Who the money belongs to">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {fixtures.household.map((p) => (
-            <div key={p.id} className="bg-bg-elev border border-line rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-ink font-medium">{p.name}</div>
-                <Badge tone={p.role === 'adult' ? 'info' : 'positive'}>
-                  {p.role}
-                </Badge>
-              </div>
-              {p.birthYear && <div className="text-xs text-ink-dim mt-1">Born {p.birthYear}</div>}
-            </div>
-          ))}
-        </div>
-      </Card>
-
       <HouseholdSection />
 
       <InvestmentAccountsSection />

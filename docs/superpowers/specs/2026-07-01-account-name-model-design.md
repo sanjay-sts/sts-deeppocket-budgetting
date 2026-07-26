@@ -17,7 +17,7 @@ Accounts, and Dashboard screens and in dropdowns) is a stored string defaulted t
 
 - Editor columns: **Name · Owner · Institution · Account type · Beneficiary · (Edit/Remove)**.
 - Display name computed on read as `custom name` if set, else
-  `"{owners joined by ', '} {institution} {accountType}"` (e.g. `Avery S, Jordan S Blueleaf TFSA`).
+  `"{owners joined by ', '} {institution} {accountType}"` (e.g. `Jordan S, Avery S Blueleaf TFSA`).
 - An account stores only an optional **custom name** override — no stored default to go stale.
 - The editor's Name field is optional; its placeholder previews the live auto-name.
 

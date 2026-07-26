@@ -24,7 +24,14 @@ editing and a create-rule prompt after reclassify). **Categories** are CRUD-edit
 (`/api/categories`, Settings "Categories" card; deleting one cascades its transactions to
 `unclassified` and removes its budget line + pointing rules). **Budgets** are editable
 (`/api/budget` — inline caps, persisted rollover, add/remove lines on the Budgets page;
-budget mode persists). Failed optimistic writes toast and revert (global `ToastHost`). Specs:
+budget mode persists). **Household members** carry a role, birth year, and optional
+`grossIncome` (Settings → Household, inline edit); income drives each adult's RRSP limit and
+marginal rate, and adding a child is what makes CESG tracking work. A brand-new database
+bootstraps `DEFAULT_CATEGORIES` (`app/constants.py`) so it is never category-less — that runs
+only against a completely empty categories table, so a deleted category never returns. Every
+import endpoint rejects non-CSV uploads with an actionable 400 instead of a 500
+(`app/services/uploads.py`), while still accepting cp1252 and UTF-16 exports.
+Failed optimistic writes toast and revert (global `ToastHost`). Specs:
 `docs/superpowers/specs/2026-07-16-m3-editable-transactions-design.md`,
 `docs/superpowers/specs/2026-07-17-m4-editable-categories-budgets-design.md`.
 
@@ -33,7 +40,6 @@ budget mode persists). Failed optimistic writes toast and revert (global `ToastH
 ```
 frontend/              Vite + React 18 + TypeScript (strict) + Tailwind — the app
   src/data/api.ts      THE DATA SEAM — the only place data enters the app (see below)
-  src/data/fixtures.json   generated mock data the app reads at boot
   src/store/useAppStore.ts Zustand store — single in-memory source of truth
   src/lib/             PURE functions: kpi.ts, canadian.ts, format.ts, account.ts
   src/pages/           10 route screens (Dashboard, Transactions, … Settings)
@@ -71,15 +77,22 @@ Regenerate mock data (from repo root, needs Python 3.11+):
 python mock/generate.py
 ```
 
-This writes `mock/out/fixtures.json` **and** copies it into `frontend/src/data/fixtures.json`
-(via the default `--frontend-data frontend/src/data`). The frontend reads that copy.
+This writes `mock/out/fixtures.json` plus the three sample CSVs — nothing else. The frontend
+does **not** read the file; `uv run seed.py` does. Output is deterministic: the seed and the
+12-month window (`DEFAULT_TODAY`) are both pinned, so a bare run reproduces the committed
+fixture byte for byte.
+
+The demo household is fictional (Avery, Jordan, Milo, Nova at invented institutions) and
+person/account ids are role-based (`p_adult1`, `chequing_1`) rather than name-derived, so
+renaming anyone never breaks an id or a test.
 
 ## Architecture — the one rule that matters
 
 **Data enters the app through exactly one seam: `frontend/src/data/api.ts`.**
 
 ```
-mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zustand)
+mock/generate.py → mock/out/fixtures.json → seed.py → SQLite
+                                          /api/data → api.ts (loadFixtures) → useAppStore (Zustand)
                                                               → lib/kpi.ts + lib/canadian.ts (pure)
                                                               → pages render
 ```
@@ -113,6 +126,8 @@ mock/generate.py → fixtures.json → api.ts (loadFixtures) → useAppStore (Zu
 
 - Saved per-bank import profiles (remember a column mapping by name) are not yet stored;
   the mapping wizard is configured per import.
+- `grossIncome` is a single current-year figure used as the prior-year earned-income proxy for
+  RRSP room; there is no per-year income history. A CRA-stated room entry overrides it.
 
 ## Working here
 

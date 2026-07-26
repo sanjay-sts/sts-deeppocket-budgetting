@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
@@ -16,9 +18,16 @@ def list_people(session: Session = Depends(get_session)):
     return [_person_out(p) for p in session.exec(select(Person)).all()]
 
 
+def _check_income(value: Optional[float]) -> None:
+    if value is not None and value < 0:
+        raise HTTPException(422, "grossIncome must be >= 0")
+
+
 @router.post("", status_code=201)
 def create_person(body: PersonCreate, session: Session = Depends(get_session)):
-    p = Person(id=new_id("p"), name=body.name, role=body.role, birth_year=body.birthYear)
+    _check_income(body.grossIncome)
+    p = Person(id=new_id("p"), name=body.name, role=body.role, birth_year=body.birthYear,
+               gross_income=body.grossIncome)
     session.add(p)
     session.commit()
     session.refresh(p)
@@ -36,6 +45,9 @@ def update_person(person_id: str, body: PersonUpdate, session: Session = Depends
         p.role = body.role
     if body.birthYear is not None:
         p.birth_year = body.birthYear
+    if "grossIncome" in body.model_fields_set:
+        _check_income(body.grossIncome)
+        p.gross_income = body.grossIncome
     session.add(p)
     session.commit()
     session.refresh(p)

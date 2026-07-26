@@ -17,7 +17,7 @@
 - **Run backend commands from `backend/`** with the venv activated, unless stated otherwise.
 - **Run frontend commands from `frontend/`.**
 - Windows PowerShell venv activate: `.\.venv\Scripts\Activate.ps1`. (Bash: `source .venv/Scripts/activate`.)
-- IDs are **strings** everywhere (matching the M1 `PersonId = string` / `AccountId = string` types). Seeded rows keep their original fixture ids (`p1`, `acc_rrsp_avery`, …); new rows get `f"{prefix}_{uuid4().hex[:8]}"`.
+- IDs are **strings** everywhere (matching the M1 `PersonId = string` / `AccountId = string` types). Seeded rows keep their original fixture ids (`p1`, `acc_rrsp_1`, …); new rows get `f"{prefix}_{uuid4().hex[:8]}"`.
 - `AccountKind` (the only legal `kind` values served to the frontend):
   `chequing | savings | credit_card | tfsa | rrsp | resp | fhsa | dcpp | non_registered | crypto`.
 - **Investment kinds** (served from the DB): `tfsa, rrsp, resp, fhsa, dcpp, non_registered, crypto`.
@@ -569,7 +569,7 @@ def test_household_comes_from_db(session):
 
 
 def test_investment_accounts_from_db_banks_from_file(session):
-    session.add(Person(id="p1", name="Avery", role="adult"))
+    session.add(Person(id="p1", name="Jordan", role="adult"))
     session.add(Account(id="x1", person_id="p1", institution="Mapletrade",
                         account_type="tfsa", kind="tfsa", name="Mapletrade TFSA"))
     session.commit()
@@ -582,7 +582,7 @@ def test_investment_accounts_from_db_banks_from_file(session):
 
 
 def test_snapshots_are_id_less(session):
-    session.add(Person(id="p1", name="Avery", role="adult"))
+    session.add(Person(id="p1", name="Jordan", role="adult"))
     session.add(Account(id="x1", person_id="p1", institution="Q", account_type="tfsa",
                         kind="tfsa", name="Q TFSA"))
     session.add(InvestmentSnapshot(id="s1", account_id="x1", date="2025-01-31", amount=100.0))
@@ -593,7 +593,7 @@ def test_snapshots_are_id_less(session):
 
 
 def test_cesg_grants_derived_from_contributions(session):
-    session.add(Person(id="p1", name="Avery", role="adult"))
+    session.add(Person(id="p1", name="Jordan", role="adult"))
     session.add(Person(id="k1", name="Milo", role="child"))
     session.add(Account(id="x1", person_id="p1", institution="WS", account_type="resp",
                         kind="resp", name="WS RESP", beneficiary_person_id="k1"))
@@ -1139,7 +1139,7 @@ git commit -m "feat: request/response schemas for editable resources"
 `backend/tests/test_people_accounts.py`:
 ```python
 def test_create_and_list_person(client):
-    r = client.post("/api/people", json={"name": "Avery", "role": "adult", "birthYear": 1985})
+    r = client.post("/api/people", json={"name": "Jordan", "role": "adult", "birthYear": 1985})
     assert r.status_code == 201
     pid = r.json()["id"]
     assert r.json()["birthYear"] == 1985
@@ -1150,9 +1150,9 @@ def test_create_and_list_person(client):
 
 def test_update_person(client):
     pid = client.post("/api/people", json={"name": "Anu", "role": "adult"}).json()["id"]
-    r = client.put(f"/api/people/{pid}", json={"name": "Jordan"})
+    r = client.put(f"/api/people/{pid}", json={"name": "Avery"})
     assert r.status_code == 200
-    assert r.json()["name"] == "Jordan"
+    assert r.json()["name"] == "Avery"
 
 
 def test_delete_person_blocked_when_owns_account(client):
@@ -1273,7 +1273,7 @@ git commit -m "feat: people CRUD with dependency-guarded delete"
 
 ```python
 def test_create_account_defaults_kind_and_name(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     r = client.post("/api/accounts", json={
         "personId": pid, "institution": "Cedarlife", "accountType": "dccp2"})
     assert r.status_code == 201
@@ -1284,7 +1284,7 @@ def test_create_account_defaults_kind_and_name(client):
 
 
 def test_create_account_natural_key_conflict(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     payload = {"personId": pid, "institution": "Mapletrade", "accountType": "tfsa"}
     assert client.post("/api/accounts", json=payload).status_code == 201
     assert client.post("/api/accounts", json=payload).status_code == 409
@@ -1827,7 +1827,7 @@ HEADER = "date,person,institution,account_type,amount\n"
 
 
 def test_import_creates_people_accounts_snapshots(session):
-    csv_text = HEADER + "20250131,avery,mapletrade,tfsa,10000\n20250131,jordan,blueleaf,rrsp,5000\n"
+    csv_text = HEADER + "20250131,jordan,mapletrade,tfsa,10000\n20250131,avery,blueleaf,rrsp,5000\n"
     summary = import_investment_csv(csv_text, session)
     assert summary["created"] == 2
     assert summary["skipped"] == 0
@@ -1837,28 +1837,28 @@ def test_import_creates_people_accounts_snapshots(session):
 
 
 def test_import_matches_person_case_insensitively(session):
-    session.add(Person(id="p1", name="Avery", role="adult"))
+    session.add(Person(id="p1", name="Jordan", role="adult"))
     session.commit()
-    import_investment_csv(HEADER + "20250131,avery,mapletrade,tfsa,10000\n", session)
-    assert len(session.exec(select(Person)).all()) == 1  # matched existing "Avery"
+    import_investment_csv(HEADER + "20250131,jordan,mapletrade,tfsa,10000\n", session)
+    assert len(session.exec(select(Person)).all()) == 1  # matched existing "Jordan"
 
 
 def test_import_upserts_by_account_date(session):
-    import_investment_csv(HEADER + "20250131,avery,mapletrade,tfsa,10000\n", session)
-    summary = import_investment_csv(HEADER + "2025-01-31,avery,mapletrade,tfsa,12000\n", session)
+    import_investment_csv(HEADER + "20250131,jordan,mapletrade,tfsa,10000\n", session)
+    summary = import_investment_csv(HEADER + "2025-01-31,jordan,mapletrade,tfsa,12000\n", session)
     assert summary["updated"] == 1
     snaps = session.exec(select(InvestmentSnapshot)).all()
     assert len(snaps) == 1 and snaps[0].amount == 12000.0
 
 
 def test_import_infers_kind_from_free_text_type(session):
-    import_investment_csv(HEADER + "20250131,avery,cedarlife,dccp2,42000\n", session)
+    import_investment_csv(HEADER + "20250131,jordan,cedarlife,dccp2,42000\n", session)
     acc = session.exec(select(Account)).first()
     assert acc.account_type == "dccp2" and acc.kind == "dcpp"
 
 
 def test_import_reports_bad_rows(session):
-    summary = import_investment_csv(HEADER + "BADDATE,avery,mapletrade,tfsa,100\n", session)
+    summary = import_investment_csv(HEADER + "BADDATE,jordan,mapletrade,tfsa,100\n", session)
     assert summary["skipped"] == 1
     assert summary["errors"][0]["row"] == 1
 
@@ -1988,7 +1988,7 @@ git commit -m "feat: investment CSV import service (auto-create + upsert)"
 
 ```python
 def test_import_endpoint_multipart(client):
-    csv_bytes = (HEADER + "20250131,avery,mapletrade,tfsa,10000\n").encode("utf-8")
+    csv_bytes = (HEADER + "20250131,jordan,mapletrade,tfsa,10000\n").encode("utf-8")
     r = client.post(
         "/api/import/investments-csv",
         files={"file": ("snap.csv", csv_bytes, "text/csv")},

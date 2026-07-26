@@ -137,33 +137,36 @@ export function estimateMarginalRate(annualIncome: number): number {
   return 0.5353;
 }
 
-// Until household members carry a stored income (issue #23), every adult is assumed
-// to earn this when estimating RRSP room and the marginal rate. Estimate only.
-export const ASSUMED_ADULT_INCOME = 100_000;
-
 export interface RrspOpportunity {
   personId: PersonId;
   name: string;
   remaining: number;
   marginalRate: number;
   refund: number;
+  /** False when this member has no recorded income, so room/refund can't be estimated. */
+  incomeKnown: boolean;
 }
 
-// Refund nudge per household adult (issue #22). Unlike contributionRoomUsed, adults
-// with no recorded contributions still get a row — their full annual limit is open.
+// Refund nudge per household adult (issue #22), driven by each member's own stored income
+// (issue #23). Unlike contributionRoomUsed, adults with no recorded contributions still get
+// a row — their full annual limit is open. An adult with no recorded income reports
+// incomeKnown: false rather than a made-up figure; the screen prompts for it instead.
 export function rrspRefundOpportunities(
   household: Person[],
   events: ContributionEvent[],
   year: number,
   limits: CraLimits,
-  income: number = ASSUMED_ADULT_INCOME,
   statedRoom: StatedRoom[] = [],
 ): RrspOpportunity[] {
-  const annualLimit = Math.min(limits.RRSP_ANNUAL_CAP, income * limits.RRSP_ANNUAL_PCT);
-  const marginalRate = estimateMarginalRate(income);
   return household
     .filter((p) => p.role === 'adult')
     .map((p) => {
+      const incomeKnown = typeof p.grossIncome === 'number';
+      const income = p.grossIncome ?? 0;
+      const annualLimit = incomeKnown
+        ? Math.min(limits.RRSP_ANNUAL_CAP, income * limits.RRSP_ANNUAL_PCT)
+        : 0;
+      const marginalRate = incomeKnown ? estimateMarginalRate(income) : 0;
       // CRA-stated room (incl. carry-forward, issue #25) beats the income estimate.
       const stated = statedRoom.find((s) => s.personId === p.id && s.kind === 'rrsp')?.amount;
       const limit = stated ?? annualLimit;
@@ -171,6 +174,9 @@ export function rrspRefundOpportunities(
         .filter((e) => e.kind === 'rrsp' && e.personId === p.id && e.date.startsWith(String(year)))
         .reduce((a, e) => a + e.amount, 0);
       const remaining = Math.max(0, Math.round((limit - used) * 100) / 100);
-      return { personId: p.id, name: p.name, remaining, marginalRate, refund: remaining * marginalRate };
+      return {
+        personId: p.id, name: p.name, remaining, marginalRate,
+        refund: remaining * marginalRate, incomeKnown,
+      };
     });
 }
