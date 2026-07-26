@@ -24,6 +24,12 @@ KIND_MAP = {
 
 CONTRIBUTION_KINDS = {"tfsa", "rrsp", "resp", "fhsa"}
 
+# Stated (carry-forward) room is personal; RESP pacing is per-beneficiary, so no 'resp'.
+STATED_ROOM_KINDS = {"tfsa", "rrsp", "fhsa"}
+
+# semi_monthly = the 1st and 15th of each month.
+RECURRING_FREQUENCIES = {"weekly", "biweekly", "semi_monthly", "monthly"}
+
 # CRA limits are law, not user data — served into /api/data's craLimits block.
 # Values match lib/canadian.ts CRA_LIMITS_2025 on the frontend.
 CRA_LIMITS_2025 = {

@@ -103,8 +103,29 @@ interface ContributionInput {
   amount: number; kind: ContributionKind; beneficiaryId?: string;
 }
 
+import type { StatedRoom, StatedRoomKind } from '../types';
+
+// CRA-stated (carry-forward) contribution room per person — issue #25.
+export const upsertStatedRoom = (b: StatedRoom) => send<StatedRoom>('PUT', '/api/room', b);
+export const deleteStatedRoom = (personId: string, kind: StatedRoomKind) =>
+  send<void>('DELETE', `/api/room/${personId}/${kind}`);
+
 export const createContribution = (b: ContributionInput) =>
   send<ContributionEvent>('POST', '/api/contributions', b);
+
+import type { RecurringContribution, RecurringFrequency } from '../types';
+
+// Recurring auto-deposit schedules — issue #28. Events materialize server-side on
+// /api/data reads, so a refetch after any of these picks up generated deposits.
+export interface RecurringInput {
+  accountId: string; personId: string; kind: ContributionKind; amount: number;
+  frequency: RecurringFrequency; startDate: string; endDate?: string; beneficiaryId?: string;
+}
+export const createRecurring = (b: RecurringInput) =>
+  send<RecurringContribution>('POST', '/api/recurring', b);
+export const updateRecurring = (id: string, b: { amount?: number; frequency?: RecurringFrequency; endDate?: string; paused?: boolean }) =>
+  send<RecurringContribution>('PUT', `/api/recurring/${id}`, b);
+export const deleteRecurring = (id: string) => send<void>('DELETE', `/api/recurring/${id}`);
 export const updateContribution = (id: string, b: Partial<ContributionInput>) =>
   send<ContributionEvent>('PUT', `/api/contributions/${id}`, b);
 export const deleteContribution = (id: string) =>

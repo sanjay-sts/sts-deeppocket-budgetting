@@ -45,6 +45,34 @@ class SnapshotUpdate(BaseModel):
     amount: Optional[float] = None
 
 
+class StatedRoomUpsert(BaseModel):
+    personId: str
+    kind: str
+    amount: float
+
+
+class RecurringCreate(BaseModel):
+    accountId: str
+    personId: str
+    kind: str
+    amount: float
+    frequency: str
+    startDate: str
+    endDate: Optional[str] = None
+    beneficiaryId: Optional[str] = None
+
+
+class RecurringUpdate(BaseModel):
+    amount: Optional[float] = None
+    frequency: Optional[str] = None
+    endDate: Optional[str] = None
+    paused: Optional[bool] = None
+
+
+class MaterializeRequest(BaseModel):
+    today: Optional[str] = None  # ISO date; defaults to the server's current date
+
+
 class ContributionCreate(BaseModel):
     accountId: str
     personId: str

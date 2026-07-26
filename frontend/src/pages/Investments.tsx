@@ -15,13 +15,13 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Progress } from '../components/ui/Progress';
 import { cad, cadK, pct } from '../lib/format';
-import { contributionRoomUsed, cesgStatusPerKid, estimateMarginalRate } from '../lib/canadian';
+import { contributionRoomUsed, cesgStatusPerKid, rrspRefundOpportunities, ASSUMED_ADULT_INCOME } from '../lib/canadian';
 import { accountReturns } from '../lib/kpi';
 import { MoneyCell } from '../components/shared/MoneyCell';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
 import { monthKey } from '../lib/format';
 import { listSnapshots, type SnapshotRow } from '../data/api';
-import type { AccountKind, ContributionKind } from '../types';
+import type { AccountKind, ContributionKind, StatedRoomKind, RecurringFrequency } from '../types';
 
 const KIND_COLORS: Record<AccountKind, string> = {
   chequing: '#64748b',
@@ -111,13 +111,18 @@ export function Investments() {
     value: Math.round(value),
   }));
 
-  // Contribution room
-  const currentYear = Number(lastSnapYm.slice(0, 4));
+  // Contribution room — incomes aren't stored on household members yet (issue #23),
+  // so every adult uses the same assumed income for RRSP limits.
+  // fall back to the real year when there are no snapshots yet (fresh/purged DB)
+  const currentYear = Number(lastSnapYm.slice(0, 4)) || new Date().getFullYear();
+  const adults = fixtures.household.filter((p) => p.role === 'adult');
+  const statedRoom = fixtures.statedRoom ?? [];
   const room = contributionRoomUsed(
     fixtures.contributionEvents,
     currentYear,
     limits,
-    { avery: 115000, jordan: 65000 },
+    Object.fromEntries(adults.map((p) => [p.id, ASSUMED_ADULT_INCOME])),
+    statedRoom,
   );
 
   const kidIds = fixtures.household.filter((p) => p.role === 'child').map((p) => p.id);
@@ -130,11 +135,14 @@ export function Investments() {
   );
 
   // Tax hints
-  const rrspAvery = room.find((r) => r.kind === 'rrsp' && r.personId === 'avery');
-  const marginalAvery = estimateMarginalRate(115000);
-  const projectedRrspRefund = rrspAvery
-    ? rrspAvery.remaining * marginalAvery
-    : 0;
+  const rrspOpps = rrspRefundOpportunities(
+    fixtures.household, fixtures.contributionEvents, currentYear, limits, ASSUMED_ADULT_INCOME, statedRoom,
+  );
+  const rrspRoomLeft = rrspOpps.reduce((a, o) => a + o.remaining, 0);
+  const projectedRrspRefund = rrspOpps.reduce((a, o) => a + o.refund, 0);
+  const marginalRate = rrspOpps[0]?.marginalRate ?? 0;
+  const allRrspStated =
+    adults.length > 0 && adults.every((p) => statedRoom.some((s) => s.personId === p.id && s.kind === 'rrsp'));
   const cesgAtRisk = cesg.reduce((a, c) => a + (c.status === 'behind' ? c.remainingYtd : 0), 0);
 
   return (
@@ -150,7 +158,9 @@ export function Investments() {
           <div className="text-xs uppercase tracking-wider text-ink-dim">RRSP refund opportunity</div>
           <div className="num text-3xl font-semibold mt-2 text-ink">{cad(projectedRrspRefund, true)}</div>
           <div className="text-xs text-ink-dim mt-1">
-            Avery has {cad(rrspAvery?.remaining ?? 0, true)} RRSP room at ~{pct(marginalAvery, 0)} marginal
+            {adults.length
+              ? `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''} at ~${pct(marginalRate, 0)} marginal ${allRrspStated ? '(room from CRA-stated values)' : `(assumes ${cad(ASSUMED_ADULT_INCOME, true)} income)`}`
+              : 'No adults in household yet'}
           </div>
         </Card>
         <Card>
@@ -281,6 +291,13 @@ export function Investments() {
             );
           })}
         </div>
+        {room.length === 0 && (
+          <p className="text-sm text-ink-dim">
+            Nothing to show yet — record contributions in the form at the bottom of this page,
+            or set your CRA-stated room below to see available room right away.
+          </p>
+        )}
+        <StatedRoomEditor />
       </Card>
 
       {/* CESG per kid */}
@@ -337,6 +354,65 @@ export function Investments() {
 
 const CONTRIBUTION_KINDS_LIST: ContributionKind[] = ['rrsp', 'tfsa', 'resp', 'fhsa'];
 
+// CRA-stated (carry-forward) room per adult — issue #25. The stated amount replaces the
+// flat annual limit on the room tiles above and in the RRSP refund card.
+const STATED_KINDS: StatedRoomKind[] = ['tfsa', 'rrsp', 'fhsa'];
+
+function StatedRoomEditor() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const saveStatedRoom = useAppStore((s) => s.saveStatedRoom);
+  const removeStatedRoom = useAppStore((s) => s.removeStatedRoom);
+  const pushToast = useAppStore((s) => s.pushToast);
+  const adults = (fixtures?.household ?? []).filter((p) => p.role === 'adult');
+  const personById = new Map((fixtures?.household ?? []).map((p) => [p.id, p]));
+  const stated = fixtures?.statedRoom ?? [];
+  const [f, setF] = useState({ personId: '', kind: 'tfsa' as StatedRoomKind, amount: '' });
+  const [error, setError] = useState('');
+
+  async function submit() {
+    setError('');
+    try {
+      await saveStatedRoom({ personId: f.personId, kind: f.kind, amount: Number(f.amount) });
+      setF({ ...f, amount: '' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-line">
+      <div className="text-xs text-ink-dim uppercase tracking-wider mb-2">
+        CRA-stated room · from your Notice of Assessment / CRA MyAccount (includes carry-forward)
+      </div>
+      <div className="flex gap-2 items-end flex-wrap mb-2">
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
+          <option value="">Person…</option>
+          {adults.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as StatedRoomKind })}>
+          {STATED_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        <input type="number" step="0.01" min="0" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Room $" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <Button onClick={submit} disabled={!f.personId || !f.amount || Number.isNaN(Number(f.amount))}>Save</Button>
+      </div>
+      {error && <p className="text-down text-sm mb-2">{error}</p>}
+      {stated.length > 0 && (
+        <div className="flex gap-2 flex-wrap text-sm">
+          {stated.map((s) => (
+            <span key={`${s.personId}-${s.kind}`} className="inline-flex items-center gap-2 bg-bg-elev border border-line rounded-md px-2 py-1 text-ink-muted">
+              {personById.get(s.personId)?.name ?? s.personId} · {s.kind.toUpperCase()} ·{' '}
+              <span className="num text-ink">{cad(s.amount, true)}</span>
+              <button className="text-down" onClick={async () => {
+                try { await removeStatedRoom(s.personId, s.kind); } catch { pushToast("Couldn't remove stated room"); }
+              }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ContributionsEditor() {
   const fixtures = useAppStore((s) => s.fixtures);
   const addContribution = useAppStore((s) => s.addContribution);
@@ -384,8 +460,8 @@ export function ContributionsEditor() {
             {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
         )}
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <input type="date" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand [color-scheme:dark]" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <input type="number" step="0.01" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         <Button onClick={submit} disabled={!f.personId || !f.accountId || !f.date || !f.amount || (f.kind === 'resp' && !f.beneficiaryId)}>Add</Button>
       </div>
       {error && <p className="text-down text-sm mb-2">{error}</p>}
@@ -394,7 +470,7 @@ export function ContributionsEditor() {
         <tbody className="divide-y divide-line">
           {events.map((e) => (
             <tr key={e.id} className="border-t border-line">
-              <td className="py-1.5 pr-3 text-ink">{e.date}</td><td className="py-1.5 pr-3 text-ink-muted">{e.kind}</td><td className="py-1.5 pr-3 text-ink num">{e.amount.toLocaleString()}</td>
+              <td className="py-1.5 pr-3 text-ink">{e.date}</td><td className="py-1.5 pr-3 text-ink-muted">{e.kind}{e.recurringId && <span className="ml-2"><Badge tone="info">auto</Badge></span>}</td><td className="py-1.5 pr-3 text-ink num">{e.amount.toLocaleString()}</td>
               <td className="text-right"><button className="text-down" onClick={() => setPendingDelete(e.id)}>Delete</button></td>
             </tr>
           ))}
@@ -411,7 +487,116 @@ export function ContributionsEditor() {
           setPendingDelete(null);
         }}
       />
+      <RecurringEditor />
     </Card>
+  );
+}
+
+const FREQ_LABEL: Record<RecurringFrequency, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Every 2 weeks',
+  semi_monthly: '1st & 15th',
+  monthly: 'Monthly',
+};
+
+// Standing deposit orders (issue #28). The backend materializes real contribution
+// events from these on every data read; rows above get an "auto" badge.
+function RecurringEditor() {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const addRecurring = useAppStore((s) => s.addRecurring);
+  const editRecurring = useAppStore((s) => s.editRecurring);
+  const removeRecurring = useAppStore((s) => s.removeRecurring);
+  const pushToast = useAppStore((s) => s.pushToast);
+  const people = fixtures?.household ?? [];
+  const accounts = (fixtures?.accounts ?? []).filter((a) => INVESTMENT_KINDS.includes(a.kind));
+  const kids = people.filter((p) => p.role === 'child');
+  const personById = new Map(people.map((p) => [p.id, p]));
+  const schedules = fixtures?.recurringContributions ?? [];
+  const [f, setF] = useState({
+    accountId: '', personId: '', kind: 'rrsp' as ContributionKind,
+    frequency: 'monthly' as RecurringFrequency, startDate: '', amount: '', beneficiaryId: '',
+  });
+  const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
+  async function submit() {
+    setError('');
+    try {
+      await addRecurring({
+        accountId: f.accountId, personId: f.personId, kind: f.kind, amount: Number(f.amount),
+        frequency: f.frequency, startDate: f.startDate,
+        beneficiaryId: f.kind === 'resp' ? f.beneficiaryId || undefined : undefined,
+      });
+      setF({ ...f, startDate: '', amount: '' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-line">
+      <div className="text-xs text-ink-dim uppercase tracking-wider mb-2">
+        Recurring auto-deposits · missed periods are added automatically when the app loads
+      </div>
+      <div className="flex gap-2 items-end flex-wrap mb-3">
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.personId} onChange={(e) => setF({ ...f, personId: e.target.value })}>
+          <option value="">Contributor…</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+          <option value="">Account…</option>
+          {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as ContributionKind })}>
+          {CONTRIBUTION_KINDS_LIST.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        {f.kind === 'resp' && (
+          <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.beneficiaryId} onChange={(e) => setF({ ...f, beneficiaryId: e.target.value })}>
+            <option value="">Beneficiary…</option>
+            {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+          </select>
+        )}
+        <select className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink focus:outline-none focus:border-brand" value={f.frequency} onChange={(e) => setF({ ...f, frequency: e.target.value as RecurringFrequency })}>
+          {(Object.keys(FREQ_LABEL) as RecurringFrequency[]).map((k) => <option key={k} value={k}>{FREQ_LABEL[k]}</option>)}
+        </select>
+        <input type="date" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand [color-scheme:dark]" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} />
+        <input type="number" step="0.01" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-28" placeholder="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <Button onClick={submit} disabled={!f.personId || !f.accountId || !f.startDate || !f.amount || (f.kind === 'resp' && !f.beneficiaryId)}>Add</Button>
+      </div>
+      {error && <p className="text-down text-sm mb-2">{error}</p>}
+      {schedules.length > 0 && (
+        <div className="space-y-1.5 text-sm">
+          {schedules.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 bg-bg-elev border border-line rounded-md px-3 py-1.5">
+              <span className="text-ink">
+                {personById.get(s.personId)?.name ?? s.personId} · {s.kind.toUpperCase()} ·{' '}
+                <span className="num">{cad(s.amount, true)}</span> {FREQ_LABEL[s.frequency].toLowerCase()} from {s.startDate}
+                {s.endDate && ` until ${s.endDate}`}
+              </span>
+              {s.paused && <Badge tone="warning">paused</Badge>}
+              <span className="flex-1" />
+              <button className="text-ink-muted hover:text-ink" onClick={async () => {
+                try { await editRecurring(s.id, { paused: !s.paused }); } catch { pushToast("Couldn't update schedule"); }
+              }}>
+                {s.paused ? 'Resume' : 'Pause'}
+              </button>
+              <button className="text-down" onClick={() => setPendingDelete(s.id)}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <ConfirmDeleteModal
+        open={pendingDelete !== null}
+        title="Delete this recurring deposit?"
+        description="Future occurrences stop; deposits already recorded are kept."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          try { await removeRecurring(pendingDelete); } catch { pushToast("Couldn't delete schedule"); }
+          setPendingDelete(null);
+        }}
+      />
+    </div>
   );
 }
 
@@ -466,8 +651,8 @@ export function SnapshotEditor() {
           <option value="">Account…</option>
           {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand" placeholder="Date (YYYY-MM-DD)" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input type="date" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand [color-scheme:dark]" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input type="number" step="0.01" className="bg-bg-elev border border-line rounded-md px-3 py-1.5 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-brand w-32" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <Button onClick={submit} disabled={!accountId || !date || !amount}>Save</Button>
       </div>
       {error && <p className="text-down text-sm mb-2">{error}</p>}
