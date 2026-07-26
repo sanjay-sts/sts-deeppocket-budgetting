@@ -8,7 +8,7 @@ from seed import seed
 
 EXPECTED_KEYS = {
     "household", "accounts", "categories", "transactions", "investments",
-    "contributionEvents", "cesgGrants", "budget", "craLimits", "meta",
+    "contributionEvents", "statedRoom", "cesgGrants", "budget", "craLimits", "meta",
 }
 
 
@@ -44,7 +44,8 @@ def test_payload_accounts_include_bank_and_investment(session):
 def test_payload_has_all_fixture_keys(session):
     payload = build_payload(session)
     base = json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
-    assert set(payload.keys()) == set(base.keys())
+    # statedRoom is user-entered (issue #25), never part of the generated fixture file.
+    assert set(payload.keys()) == set(base.keys()) | {"statedRoom"}
 
 
 def test_household_comes_from_db(session):
