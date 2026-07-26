@@ -57,6 +57,26 @@ class Contribution(SQLModel, table=True):
     amount: float
     kind: str                  # 'tfsa' | 'rrsp' | 'resp' | 'fhsa'
     beneficiary_person_id: Optional[str] = Field(default=None, foreign_key="person.id")
+    # Set when this event was materialized by a RecurringContribution (issue #28).
+    # Plain column, no FK: deleting the schedule keeps the events (they really happened).
+    recurring_id: Optional[str] = None
+
+
+class RecurringContribution(SQLModel, table=True):
+    # A standing deposit order (issue #28). Concrete Contribution rows are materialized
+    # from it on /api/data reads; id ":" date is the natural key for idempotency, and
+    # last_materialized stops deleted occurrences from being regenerated.
+    id: str = Field(primary_key=True)
+    account_id: str = Field(foreign_key="account.id", index=True)
+    person_id: str = Field(foreign_key="person.id")
+    kind: str                  # 'tfsa' | 'rrsp' | 'resp' | 'fhsa'
+    amount: float
+    beneficiary_person_id: Optional[str] = Field(default=None, foreign_key="person.id")
+    frequency: str             # 'weekly' | 'biweekly' | 'semi_monthly' | 'monthly'
+    start_date: str            # ISO 'YYYY-MM-DD'
+    end_date: Optional[str] = None
+    paused: bool = False
+    last_materialized: Optional[str] = None  # ISO date of the last materialization run
 
 
 class StatedRoom(SQLModel, table=True):

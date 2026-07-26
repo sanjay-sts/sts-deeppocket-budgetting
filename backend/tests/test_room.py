@@ -30,6 +30,9 @@ def test_rejects_bad_kind_person_and_amount(client):
     assert client.put("/api/room", json={"personId": pid, "kind": "lira", "amount": 1}).status_code == 422
     assert client.put("/api/room", json={"personId": "p_missing", "kind": "tfsa", "amount": 1}).status_code == 404
     assert client.put("/api/room", json={"personId": pid, "kind": "tfsa", "amount": -5}).status_code == 422
+    # contribution room belongs to taxpayers; kids' RESP room is tracked per beneficiary
+    kid = client.post("/api/people", json={"name": "K", "role": "child"}).json()["id"]
+    assert client.put("/api/room", json={"personId": kid, "kind": "tfsa", "amount": 1}).status_code == 422
 
 
 def test_delete_removes_entry(client):

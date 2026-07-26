@@ -93,6 +93,24 @@ export interface ContributionEvent {
   amount: number;
   kind: ContributionKind;
   beneficiaryId?: PersonId;
+  recurringId?: string; // set when materialized from a RecurringContribution (issue #28)
+}
+
+// Standing deposit order; the backend materializes concrete ContributionEvents
+// from it on every /api/data read — issue #28.
+export type RecurringFrequency = 'weekly' | 'biweekly' | 'semi_monthly' | 'monthly';
+
+export interface RecurringContribution {
+  id: string;
+  accountId: AccountId;
+  personId: PersonId;
+  kind: ContributionKind;
+  amount: number;
+  frequency: RecurringFrequency;
+  startDate: IsoDate;
+  endDate?: IsoDate;
+  paused: boolean;
+  beneficiaryId?: PersonId;
 }
 
 // CRA-stated available room (NOA / MyAccount) incl. carry-forward — issue #25.
@@ -155,6 +173,7 @@ export interface Fixtures {
   investments: InvestmentSnapshot[];
   contributionEvents: ContributionEvent[];
   statedRoom?: StatedRoom[];
+  recurringContributions?: RecurringContribution[];
   cesgGrants: CesgGrant[];
   budget: Budget;
   craLimits: CraLimits;
