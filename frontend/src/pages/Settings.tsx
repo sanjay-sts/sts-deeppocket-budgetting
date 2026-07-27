@@ -248,7 +248,7 @@ function InvestmentAccountsSection() {
                   <MultiSelect options={ownerOptions} selected={draft.personIds} onChange={(ids) => setDraft({ ...draft, personIds: ids })} placeholder="Owner" />
                 </td>
                 <td className="py-1.5 pr-3 align-top">
-                  <input className={inputClass} list="institution-options" placeholder="Institution — e.g. Blueleaf, Mapletrade, TD" value={draft.institution} onChange={(e) => setDraft({ ...draft, institution: e.target.value })} />
+                  <input className={inputClass} list="institution-options" placeholder="Institution — your bank or brokerage" value={draft.institution} onChange={(e) => setDraft({ ...draft, institution: e.target.value })} />
                 </td>
                 <td className="py-1.5 pr-3 align-top">
                   <input className={inputClass} placeholder="Account type — e.g. tfsa, rrsp, resp, fhsa" value={draft.accountType} onChange={(e) => setDraft({ ...draft, accountType: e.target.value })} />
@@ -296,7 +296,7 @@ function InvestmentAccountsSection() {
             <td className="pt-2 pr-3 align-top">
               <input
                 className={inputClass}
-                placeholder="Institution — e.g. Blueleaf, Mapletrade, TD"
+                placeholder="Institution — your bank or brokerage"
                 list="institution-options"
                 value={form.institution}
                 onChange={(e) => setForm({ ...form, institution: e.target.value })}
