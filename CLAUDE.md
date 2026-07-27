@@ -122,12 +122,19 @@ mock/generate.py → mock/out/fixtures.json → seed.py → SQLite
 - **Components** are presentational; business logic belongs in `lib/`. Reuse `components/ui/*`
   (Button, Card, Badge, Progress, Tabs) before adding new primitives.
 
-## Known gaps (tracked on the GitHub project board)
+## Known gaps (tracked as GitHub issues)
 
 - Saved per-bank import profiles (remember a column mapping by name) are not yet stored;
-  the mapping wizard is configured per import.
+  the mapping wizard is configured per import. ([#1](https://github.com/sanjay-sts/sts-deeppocket-budgetting/issues/1))
 - `grossIncome` is a single current-year figure used as the prior-year earned-income proxy for
   RRSP room; there is no per-year income history. A CRA-stated room entry overrides it.
+  ([#2](https://github.com/sanjay-sts/sts-deeppocket-budgetting/issues/2))
+
+**Older `(issue #N)` annotations in comments, specs, and plans do not resolve.** The repository
+history was rewritten on 2026-07-26 to purge personal data, which meant deleting and recreating
+the repo, so every issue and PR before that date is gone and numbering restarted at #1. Those
+annotations are still useful as prose — they say *why* a piece of code exists — but treat the
+number as dead, and don't assume `#1` in an old plan is the `#1` above.
 
 ## Working here
 
