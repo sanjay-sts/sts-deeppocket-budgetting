@@ -2,6 +2,7 @@ from sqlmodel import Session, select
 
 from app.models import Account, Category, Transaction
 from seed import seed
+from app.constants import DEFAULT_CATEGORIES
 
 
 def _seed(engine):
@@ -26,8 +27,12 @@ def test_purge_all_wipes_banking_too(client, engine):
     assert r.status_code == 200
     with Session(engine) as s:
         assert s.exec(select(Transaction)).all() == []
-        assert s.exec(select(Category)).all() == []
         assert s.exec(select(Account)).all() == []
+        # Categories are wiped with everything else, then re-bootstrapped to the defaults:
+        # "clear everything" should leave a blank slate that still works, and a database with
+        # no categories cannot classify an import (issue #17).
+        names = {c.id for c in s.exec(select(Category)).all()}
+        assert names == {c["id"] for c in DEFAULT_CATEGORIES}
 
 
 def test_purge_demo_restores_everything(client, engine):

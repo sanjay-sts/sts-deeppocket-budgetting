@@ -3,7 +3,7 @@ import io
 
 from sqlmodel import Session, select
 
-from ..constants import normalize_date, normalize_kind, new_id, parse_amount
+from ..constants import csv_cell, normalize_date, normalize_kind, new_id, parse_amount
 from ..models import Person, Account, AccountOwner, InvestmentSnapshot
 
 REQUIRED = {"date", "person", "institution", "account_type", "amount"}
@@ -47,7 +47,7 @@ def import_investment_csv(text: str, session: Session) -> dict:
         return summary
 
     for i, raw in enumerate(reader, start=1):
-        row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw.items()}
+        row = {(k or "").strip().lower(): csv_cell(v) for k, v in raw.items()}
         try:
             date = normalize_date(row["date"])
             amount = parse_amount(row["amount"])

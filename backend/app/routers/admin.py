@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from ..constants import INVESTMENT_KINDS
 from ..db import get_session
+from ..services.bootstrap import bootstrap_default_categories
 from ..models import (
     Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution, Person,
     Category, Transaction, Rule, BudgetLine, BudgetConfig, AppMeta,
@@ -59,5 +60,10 @@ def purge(body: PurgeRequest, session: Session = Depends(get_session)) -> dict:
         # Reseed the full demo dataset. Importable because uvicorn/pytest run from backend/.
         from seed import seed
         seed(session, investments="demo")
+
+    # A purge empties the categories table while the app is live, and the startup bootstrap
+    # won't run again until a restart — anything imported in between would point at a
+    # category id that no longer exists. No-ops unless the table really is empty.
+    bootstrap_default_categories(session)
 
     return {"mode": mode, "ok": True}

@@ -10,6 +10,12 @@ export interface RoomUsed {
   usedYtd: number;
   annualLimit: number;
   remaining: number;
+  /**
+   * False only for RRSP rows whose owner has no recorded income and no CRA-stated room —
+   * their limit is unknowable, which is different from a limit of zero. Screens must not
+   * render a percentage for these.
+   */
+  limitKnown: boolean;
 }
 
 export function contributionRoomUsed(
@@ -46,12 +52,14 @@ export function contributionRoomUsed(
     const [personId, kind] = key.split('::') as [PersonId, 'tfsa' | 'rrsp' | 'fhsa'];
     const stated = statedByKey.get(key);
     let annualLimit = 0;
+    let limitKnown = true;
     if (stated !== undefined) annualLimit = stated;
     else if (kind === 'tfsa') annualLimit = limits.TFSA_ANNUAL;
     else if (kind === 'fhsa') annualLimit = limits.FHSA_ANNUAL;
     else if (kind === 'rrsp') {
-      const earned = rrspEarnedIncomePriorYear[personId] ?? 0;
-      annualLimit = Math.min(limits.RRSP_ANNUAL_CAP, earned * limits.RRSP_ANNUAL_PCT);
+      const earned = rrspEarnedIncomePriorYear[personId];
+      limitKnown = earned !== undefined;
+      annualLimit = Math.min(limits.RRSP_ANNUAL_CAP, (earned ?? 0) * limits.RRSP_ANNUAL_PCT);
     }
     out.push({
       kind,
@@ -59,6 +67,7 @@ export function contributionRoomUsed(
       usedYtd: Math.round(used * 100) / 100,
       annualLimit: Math.round(annualLimit),
       remaining: Math.max(0, annualLimit - used),
+      limitKnown,
     });
   }
 
@@ -69,6 +78,7 @@ export function contributionRoomUsed(
       usedYtd: Math.round(used * 100) / 100,
       annualLimit: limits.RESP_ANNUAL_FOR_FULL_CESG,
       remaining: Math.max(0, limits.RESP_ANNUAL_FOR_FULL_CESG - used),
+      limitKnown: true,
     });
   }
 
@@ -120,6 +130,9 @@ export function cesgStatusPerKid(
 // Rough marginal-rate hint for Ontario 2025 — enough for a "your refund would be ~$X" nudge.
 // Not tax advice; displayed as an estimate only.
 const ON_MARGINAL_2025: Array<{ upTo: number; rate: number }> = [
+  // Below the basic personal amount no tax is payable, so an RRSP deduction refunds
+  // nothing — without this tier a non-earner is shown a fictitious refund.
+  { upTo: 15705, rate: 0 },
   { upTo: 55867, rate: 0.2005 },
   { upTo: 90000, rate: 0.2415 },
   { upTo: 111733, rate: 0.2965 },

@@ -5,7 +5,7 @@ afterward, so the bootstrap must never re-add what someone deliberately deleted.
 """
 import json
 
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.config import FIXTURES_PATH
 from app.constants import DEFAULT_CATEGORIES
@@ -89,3 +89,43 @@ def test_defaults_match_the_seed_fixture():
         f = by_id[d["id"]]
         assert f["name"] == d["name"], d["id"]
         assert f["group"] == d["group"], d["id"]
+        # bucket and essential-ness drive the 50/30/20 view and the essential-spend KPI, so
+        # they have to match too — a seeded DB and a bootstrapped one must be identical.
+        assert f.get("bucket503020") == d.get("bucket503020"), d["id"]
+        assert f.get("isEssential", False) == d.get("is_essential", False), d["id"]
+
+
+def test_purge_all_leaves_the_database_usable(client):
+    """Danger zone -> 'Clear everything' empties the categories table at runtime. Without a
+    re-bootstrap the very next import writes transactions pointing at a category id that no
+    longer exists, and the Transactions page white-screens on the dangling reference."""
+    assert client.post("/api/admin/purge", json={"mode": "all"}).status_code == 200
+    payload = client.get("/api/data").json()
+    assert payload["categories"], "a live purge left the app with no categories"
+    assert any(c["id"] == "unclassified" for c in payload["categories"])
+
+    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    aid = client.post("/api/accounts", json={
+        "personIds": [pid], "institution": "Northline", "accountType": "chequing"}).json()["id"]
+    tx = client.post("/api/transactions", json={
+        "accountId": aid, "date": "2026-01-06", "merchant": "COFFEE", "amount": -4.5})
+    assert tx.status_code == 200, tx.text
+    cats = {c["id"] for c in client.get("/api/data").json()["categories"]}
+    assert tx.json()["categoryId"] in cats, "transaction points at a category that does not exist"
+
+
+def test_startup_hook_bootstraps_a_fresh_database(tmp_path, monkeypatch):
+    """The wiring itself, not just the function: main.on_startup is what a real launch runs,
+    and nothing else covers it (the test client never fires lifespan events)."""
+    from sqlmodel import SQLModel, create_engine
+    import app.main as main
+
+    engine = create_engine(f"sqlite:///{tmp_path}/fresh.db")
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(main, "engine", engine)
+    monkeypatch.setattr(main, "init_db", lambda: None)
+
+    main.on_startup()
+
+    with Session(engine) as s:
+        assert {c.id for c in s.exec(select(Category)).all()} == {c["id"] for c in DEFAULT_CATEGORIES}

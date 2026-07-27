@@ -121,7 +121,11 @@ export function Investments() {
     fixtures.contributionEvents,
     currentYear,
     limits,
-    Object.fromEntries(adults.map((p) => [p.id, p.grossIncome ?? 0])),
+    // Omit adults with no recorded income entirely: a missing entry means "limit unknown",
+    // which the tiles render differently from a limit of zero.
+    Object.fromEntries(
+      adults.filter((p) => p.grossIncome !== undefined).map((p) => [p.id, p.grossIncome as number]),
+    ),
     statedRoom,
   );
 
@@ -145,15 +149,22 @@ export function Investments() {
   const missingIncome = rrspOpps.filter((o) => !o.incomeKnown);
   const allRrspStated =
     adults.length > 0 && adults.every((p) => statedRoom.some((s) => s.personId === p.id && s.kind === 'rrsp'));
+  // Room can be known (from CRA-stated values) while the refund is not (no income to price
+  // the deduction against). Showing "$0" in that case would contradict the room on the very
+  // next line, so the headline defers to the subtitle instead.
+  const refundEstimable = rrspOpps.some((o) => o.incomeKnown && o.remaining > 0);
+  const rrspHeadline = refundEstimable ? cad(projectedRrspRefund, true) : '—';
   const rrspSubtitle = adults.length === 0
     ? 'No adults in household yet — add one in Settings → Household'
-    : missingIncome.length === adults.length && !allRrspStated
+    : rrspRoomLeft === 0 && missingIncome.length === adults.length
       ? `Add ${adults.length > 1 ? 'incomes' : 'an income'} in Settings → Household to estimate this`
       : [
           `${cad(rrspRoomLeft, true)} RRSP room across ${adults.length} adult${adults.length > 1 ? 's' : ''}`,
-          knownRates.length === 1 ? `at ~${pct(knownRates[0], 0)} marginal` : '',
+          knownRates.length === 1 && refundEstimable ? `at ~${pct(knownRates[0], 0)} marginal` : '',
           allRrspStated ? '(room from CRA-stated values)' : '',
-          missingIncome.length ? `· ${missingIncome.map((o) => o.name).join(', ')} missing an income` : '',
+          missingIncome.length
+            ? `· no refund estimate for ${missingIncome.map((o) => o.name).join(', ')} until an income is set`
+            : '',
         ].filter(Boolean).join(' ');
   const cesgAtRisk = cesg.reduce((a, c) => a + (c.status === 'behind' ? c.remainingYtd : 0), 0);
 
@@ -168,7 +179,7 @@ export function Investments() {
         </Card>
         <Card>
           <div className="text-xs uppercase tracking-wider text-ink-dim">RRSP refund opportunity</div>
-          <div className="num text-3xl font-semibold mt-2 text-ink">{cad(projectedRrspRefund, true)}</div>
+          <div className="num text-3xl font-semibold mt-2 text-ink">{rrspHeadline}</div>
           <div className="text-xs text-ink-dim mt-1">{rrspSubtitle}</div>
         </Card>
         <Card>
@@ -286,15 +297,32 @@ export function Investments() {
                     {r.kind.toUpperCase()}
                     <span className="text-ink-dim font-normal"> · {who}</span>
                   </div>
-                  <Badge tone={pctUsed >= 1 ? 'positive' : pctUsed > 0.7 ? 'warning' : 'neutral'}>
-                    {pct(pctUsed, 0)}
-                  </Badge>
+                  {r.limitKnown && (
+                    <Badge tone={pctUsed >= 1 ? 'positive' : pctUsed > 0.7 ? 'warning' : 'neutral'}>
+                      {pct(pctUsed, 0)}
+                    </Badge>
+                  )}
                 </div>
-                <div className="num text-lg text-ink mt-1">
-                  {cad(r.usedYtd, true)} <span className="text-xs text-ink-dim">/ {cad(r.annualLimit, true)}</span>
-                </div>
-                <div className="mt-2"><Progress value={pctUsed} /></div>
-                <div className="text-xs text-ink-dim mt-1">{cad(r.remaining, true)} remaining</div>
+                {r.limitKnown ? (
+                  <>
+                    <div className="num text-lg text-ink mt-1">
+                      {cad(r.usedYtd, true)} <span className="text-xs text-ink-dim">/ {cad(r.annualLimit, true)}</span>
+                    </div>
+                    <div className="mt-2"><Progress value={pctUsed} /></div>
+                    <div className="text-xs text-ink-dim mt-1">{cad(r.remaining, true)} remaining</div>
+                  </>
+                ) : (
+                  // No income and no CRA-stated room: the limit is unknowable, so showing a
+                  // percentage of zero would claim none of it has been used.
+                  <>
+                    <div className="num text-lg text-ink mt-1">
+                      {cad(r.usedYtd, true)} <span className="text-xs text-ink-dim">contributed</span>
+                    </div>
+                    <div className="text-xs text-ink-dim mt-2">
+                      Limit unknown — set {who}&apos;s income in Settings → Household, or enter CRA-stated room below.
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}

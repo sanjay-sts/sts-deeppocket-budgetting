@@ -54,7 +54,8 @@ import type { Person, Account } from '../types';
 export interface PersonInput {
   name: string;
   role: 'adult' | 'child';
-  birthYear?: number;
+  /** Omit to leave alone on update; send null to clear the stored year. */
+  birthYear?: number | null;
   /** Omit to leave unset on create; send null on update to clear a recorded income. */
   grossIncome?: number | null;
 }

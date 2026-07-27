@@ -43,7 +43,9 @@ def update_person(person_id: str, body: PersonUpdate, session: Session = Depends
         p.name = body.name
     if body.role is not None:
         p.role = body.role
-    if body.birthYear is not None:
+    # Absent key = leave alone; explicit null = clear. Same contract as grossIncome, so a
+    # wrong birth year can actually be removed rather than silently sticking.
+    if "birthYear" in body.model_fields_set:
         p.birth_year = body.birthYear
     if "grossIncome" in body.model_fields_set:
         _check_income(body.grossIncome)

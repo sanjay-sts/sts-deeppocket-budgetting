@@ -34,5 +34,10 @@ npm test
 ### Regenerating mock data
 
 ```bash
-python mock/generate.py        # writes mock/out/ + frontend/src/data/fixtures.json
+python mock/generate.py        # writes mock/out/ only: fixtures.json + 3 sample CSVs
+cd backend && uv run seed.py   # load it into deeppocket.db (the app reads the DB, not the file)
 ```
+
+Output is deterministic — the RNG seed and the 12-month window (`DEFAULT_TODAY`) are both
+pinned, so a bare run reproduces the committed fixture exactly. The demo household is
+fictional; ids are role-based (`p_adult1`, `chequing_1`), never derived from names.

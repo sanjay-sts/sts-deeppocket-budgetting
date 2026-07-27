@@ -68,3 +68,17 @@ def test_role_is_editable_so_a_csv_imported_person_can_be_corrected(client):
     assert r.status_code == 200
     assert r.json()["role"] == "child"
     assert r.json()["birthYear"] == 2019
+
+
+def test_birth_year_can_be_cleared(client):
+    """The inline Household editor lets you blank the field, so an explicit null has to
+    clear it — otherwise a wrong year (e.g. from a CSV import) can never be removed."""
+    pid = _create(client, birthYear=1986).json()["id"]
+    assert client.put(f"/api/people/{pid}", json={"birthYear": None}).status_code == 200
+    assert "birthYear" not in client.get("/api/people").json()[0]
+
+
+def test_birth_year_untouched_when_key_absent(client):
+    pid = _create(client, birthYear=1986).json()["id"]
+    r = client.put(f"/api/people/{pid}", json={"name": "Avery R."})
+    assert r.json()["birthYear"] == 1986

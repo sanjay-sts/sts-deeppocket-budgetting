@@ -73,7 +73,8 @@ function HouseholdSection() {
       await editPerson(editingId, {
         name: draft.name,
         role: draft.role,
-        birthYear: draft.birthYear ? Number(draft.birthYear) : undefined,
+        // null, not undefined: blanking the field must clear the stored year
+        birthYear: draft.birthYear === '' ? null : Number(draft.birthYear),
         grossIncome: income,
       });
       setEditingId(null);

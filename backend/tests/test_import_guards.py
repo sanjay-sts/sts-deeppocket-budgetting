@@ -150,3 +150,33 @@ def test_unterminated_quote_never_500s(client):
                          files={"file": ("broken.csv", broken, "text/csv")})
     assert parsed.status_code == 400
     assert "quote" in _detail(parsed).lower()
+
+
+def test_utf8_file_with_one_bad_byte_is_not_reinterpreted_as_cp1252(client):
+    """Concatenated exports can leave a single invalid byte in an otherwise UTF-8 file.
+    Falling back to cp1252 for the WHOLE file would silently turn every accented merchant
+    into mojibake and report success."""
+    good = "date,person,institution,account_type,amount\n"
+    rows = "".join(f"2026013{i%10},Amélie,société,tfsa,{1000+i}\n" for i in range(30))
+    raw = (good + rows).encode("utf-8")[:200] + b"\xff" + (good + rows).encode("utf-8")[200:]
+    r = client.post("/api/import/investments-csv",
+                    files={"file": ("mixed.csv", raw, "text/csv")})
+    assert r.status_code == 200, _detail(r)
+    names = [p["name"] for p in client.get("/api/data").json()["household"]]
+    assert "Amélie" in names, f"accents were corrupted: {names}"
+    assert not any("Ã" in n for n in names), f"cp1252 mojibake: {names}"
+
+
+def test_stray_nul_does_not_reject_an_otherwise_good_csv(client):
+    """One padding NUL must not cost the user all their rows — csv.reader itself refuses
+    NULs, so they have to be stripped rather than tolerated."""
+    text = ("date,person,institution,account_type,amount\n"
+            + "".join(f"2026013{i%10},Avery,northline,tfsa,{1000+i}\n" for i in range(50)))
+    raw = text.encode("utf-8").replace(b"northline", b"north\x00line", 1)
+    r = client.post("/api/import/investments-csv", files={"file": ("pad.csv", raw, "text/csv")})
+    assert r.status_code == 200, _detail(r)
+    body = r.json()
+    # repeated dates land on the same account+date key, so later rows update rather than
+    # create; what matters is that all 50 were processed and none were skipped
+    assert body["created"] + body["updated"] == 50, body
+    assert body["skipped"] == 0 and body["errors"] == [], body

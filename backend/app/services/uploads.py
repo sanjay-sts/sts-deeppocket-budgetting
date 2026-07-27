@@ -28,6 +28,16 @@ _SIGNATURES: list[tuple[bytes, str]] = [
 _EXPORT_HINT = "Open it in your spreadsheet app and export as CSV, then import that file."
 
 
+def _looks_binary(text: str) -> bool:
+    """NUL density separates binary (and BOM-less UTF-16, ~50% NUL) from a stray pad byte."""
+    return text.count("\x00") > max(1, len(text) // 100)
+
+
+def _strip_stray_nuls(text: str) -> str:
+    """csv.reader refuses any NUL outright, so the few we tolerate have to go."""
+    return text.replace("\x00", "") if "\x00" in text else text
+
+
 def decode_upload(raw: bytes) -> str:
     """Decode CSV bytes to text. Raises HTTPException(400) for anything that isn't text."""
     if not raw.strip():
@@ -43,14 +53,26 @@ def decode_upload(raw: bytes) -> str:
     if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
         encodings = ("utf-16", *encodings)
 
+    # A handful of bad bytes in an otherwise-UTF-8 file means damage, not a cp1252 file:
+    # reinterpreting the whole buffer as cp1252 would turn every accented merchant into
+    # mojibake and still report success. A real cp1252 file fails at every accent, so its
+    # replacement count is high and it falls through to the ladder below.
+    if not raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        lenient = raw.decode("utf-8-sig", errors="replace")
+        damage = lenient.count("�")
+        if 0 < damage <= max(3, len(raw) // 5000) and not _looks_binary(lenient):
+            return _strip_stray_nuls(lenient.replace("�", ""))
+
     for encoding in encodings:
         try:
             text = raw.decode(encoding)
         except (UnicodeDecodeError, UnicodeError):
             continue
-        # cp1252 maps almost any byte, so a NUL is the tell that we decoded binary.
-        if "\x00" in text:
+        # cp1252 maps almost any byte, so pervasive NULs are the tell that we decoded binary
+        # — but a lone padding NUL is just noise in a real CSV and must not cost every row.
+        if _looks_binary(text):
             continue
+        text = _strip_stray_nuls(text)
         # A saved login/error page decodes perfectly and then parses as one nonsense
         # column, so the header check has to happen here rather than in the CSV reader.
         if text.lstrip()[:512].lower().startswith(("<!doctype", "<html", "<head", "<?xml")):

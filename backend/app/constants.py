@@ -1,3 +1,4 @@
+import math
 import re
 import uuid
 
@@ -101,8 +102,27 @@ def new_id(prefix: str) -> str:
 
 
 def parse_amount(s: str) -> float:
-    """Tolerate thousands separators and a leading currency symbol ('$1,234.56')."""
-    return float(s.replace(",", "").replace("$", "").strip())
+    """Tolerate thousands separators and a leading currency symbol ('$1,234.56').
+
+    Rejects non-finite values: float() happily accepts 'nan'/'inf' (and 1e400 overflows to
+    inf), which SQLite would store as NULL and every KPI sum would then turn into NaN.
+    """
+    value = float(s.replace(",", "").replace("$", "").strip())
+    if not math.isfinite(value):
+        raise ValueError(f"not a finite amount: {s!r}")
+    return value
+
+
+def csv_cell(value) -> str:
+    """Flatten one DictReader cell to text.
+
+    DictReader yields a LIST for the cells past the end of the header (a ragged row, e.g. an
+    unquoted comma in a merchant name) and None for missing ones, so a bare `(v or "").strip()`
+    raises AttributeError on the list and 500s the whole import.
+    """
+    if isinstance(value, list):
+        return " ".join(v for v in value if v).strip()
+    return (value or "").strip()
 
 
 def normalize_date(s: str) -> str:
