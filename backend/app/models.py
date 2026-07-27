@@ -7,6 +7,10 @@ class Person(SQLModel, table=True):
     name: str = Field(index=True)
     role: str  # 'adult' | 'child'
     birth_year: Optional[int] = None
+    # Annual gross employment income, used as the prior-year earned-income proxy for RRSP
+    # room and to estimate a marginal tax rate (issue #23). None = not recorded, which is
+    # deliberately distinct from 0.0 (a real answer for a non-earning member).
+    gross_income: Optional[float] = None
 
 
 class Account(SQLModel, table=True):

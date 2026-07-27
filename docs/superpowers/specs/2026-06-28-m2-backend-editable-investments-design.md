@@ -141,7 +141,7 @@ Seeding is **idempotent** (re-running does not duplicate rows).
 | POST | `/api/import/investments-csv` | Multipart upload → row-level summary |
 
 **Validation/errors.** Dates accept `YYYYMMDD` and `YYYY-MM-DD`; amounts numeric; person
-match is case-insensitive (`avery` → existing `Avery`); deleting a person/account with
+match is case-insensitive (`jordan` → existing `Jordan`); deleting a person/account with
 dependent rows is blocked with a clear message (or cascades — see open questions). Import
 returns `{created, updated, skipped, errors:[{row, reason}]}`.
 

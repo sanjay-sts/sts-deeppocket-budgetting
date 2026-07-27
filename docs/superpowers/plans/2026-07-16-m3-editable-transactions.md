@@ -16,7 +16,7 @@
 - Dates are ISO `YYYY-MM-DD` strings in the DB and on the wire.
 - Transaction editable fields are ONLY: `category_id`, `is_transfer`, `is_duplicate`, `notes`, `tags`. PATCH rejects anything else with 422 (`extra="forbid"`).
 - `/api/data` keeps the exact M2 key set; `rules` is NOT in the payload.
-- Fixture IDs are preserved verbatim at seed (`avery_chequing`, `t1`, `groceries`, …).
+- Fixture IDs are preserved verbatim at seed (`chequing_1`, `t1`, `groceries`, …).
 - Categorization precedence: history → rules (newest first) → `unclassified`.
 - Frontend: business logic in `lib/` or the backend, never in components; all data access through `frontend/src/data/api.ts`; types in `frontend/src/types/index.ts`.
 - Backend commands run from `backend/` with `uv run …`; frontend from `frontend/`.
@@ -230,16 +230,16 @@ def test_seed_populates_banking_domain(session):
 
 def test_seed_bank_accounts_keep_ids_names_and_opening_balances(session):
     seed(session)
-    acc = session.get(Account, "avery_chequing")
+    acc = session.get(Account, "chequing_1")
     assert acc is not None and acc.kind == "chequing"
-    assert acc.opening_balance == 14500.0
+    assert acc.opening_balance == 11250.0
     # custom_name preserves the fixture display name so screens render identically.
     assert acc.custom_name == "Maple Trust Chequing (Avery)"
     owners = session.exec(
-        select(AccountOwner).where(AccountOwner.account_id == "avery_chequing")
+        select(AccountOwner).where(AccountOwner.account_id == "chequing_1")
     ).all()
-    assert [o.person_id for o in owners] == ["avery"]
-    visa = session.get(Account, "avery_td_visa")
+    assert [o.person_id for o in owners] == ["jordan"]
+    visa = session.get(Account, "cc_visa_1")
     assert visa.is_liability is True
 
 
@@ -256,7 +256,7 @@ def test_seed_is_idempotent(session):
 def test_investments_empty_keeps_banking(session):
     seed(session)
     seed(session, investments="empty")
-    assert session.get(Account, "avery_chequing") is not None
+    assert session.get(Account, "chequing_1") is not None
     assert len(session.exec(select(Transaction)).all()) > 0
     inv = [a for a in session.exec(select(Account)).all() if a.kind not in BANK_KINDS]
     assert inv == []
@@ -429,15 +429,15 @@ def test_payload_is_composed_entirely_from_db(session, monkeypatch):
     assert set(payload.keys()) == EXPECTED_KEYS
     assert len(payload["transactions"]) == 864
     assert payload["craLimits"]["TFSA_ANNUAL"] == 7000
-    assert payload["meta"]["openingBalances"]["avery_chequing"] == 14500.0
+    assert payload["meta"]["openingBalances"]["chequing_1"] == 11250.0
     assert payload["meta"]["seed"] == 42
     assert payload["budget"]["mode"] == "envelope"
     tx = next(t for t in payload["transactions"] if t["id"] == "t1")
     assert tx == {
-        "id": "t1", "date": "2025-05-15", "accountId": "avery_chequing",
+        "id": "t1", "date": "2025-05-15", "accountId": "chequing_1",
         "rawMerchant": "PAYROLL DEP NORTHWIND", "merchant": "Payroll Dep Northwind",
-        "amount": 4666.73, "categoryId": "salary", "personId": "avery",
-        "runningTotal": 16015.09,
+        "amount": 3916.73, "categoryId": "salary", "personId": "p_adult1",
+        "runningTotal": 12387.45,
     }
 
 
@@ -446,9 +446,9 @@ def test_payload_accounts_include_bank_and_investment(session):
     payload = build_payload(session)
     kinds = {a["kind"] for a in payload["accounts"]}
     assert "chequing" in kinds and "credit_card" in kinds
-    chequing = next(a for a in payload["accounts"] if a["id"] == "avery_chequing")
+    chequing = next(a for a in payload["accounts"] if a["id"] == "chequing_1")
     assert chequing["name"] == "Maple Trust Chequing (Avery)"
-    visa = next(a for a in payload["accounts"] if a["id"] == "avery_td_visa")
+    visa = next(a for a in payload["accounts"] if a["id"] == "cc_visa_1")
     assert visa["isLiability"] is True
 ```
 
@@ -636,7 +636,7 @@ def test_purge_investments_keeps_banking(client, engine):
     r = client.post("/api/admin/purge", json={"mode": "investments"})
     assert r.status_code == 200
     with Session(engine) as s:
-        assert s.get(Account, "avery_chequing") is not None
+        assert s.get(Account, "chequing_1") is not None
         assert len(s.exec(select(Transaction)).all()) == 864
         kinds = {a.kind for a in s.exec(select(Account)).all()}
         assert kinds <= {"chequing", "savings", "credit_card"}
@@ -658,7 +658,7 @@ def test_purge_demo_restores_everything(client, engine):
     assert r.status_code == 200
     with Session(engine) as s:
         assert len(s.exec(select(Transaction)).all()) == 864
-        assert s.get(Account, "avery_chequing") is not None
+        assert s.get(Account, "chequing_1") is not None
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**

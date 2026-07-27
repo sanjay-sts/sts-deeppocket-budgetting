@@ -107,7 +107,7 @@ Props:
 ```ts
 interface ConfirmDeleteModalProps {
   open: boolean;
-  title: string;            // e.g. "Remove Avery S?"
+  title: string;            // e.g. "Remove Jordan S?"
   description: string;      // e.g. "This will permanently delete this household member."
   confirmLabel?: string;    // default "Delete"
   onConfirm: () => Promise<void>;

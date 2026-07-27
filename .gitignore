@@ -3,3 +3,5 @@ scratchpad/
 frontend/.vite/
 node_modules/
 docs/guide/user-guide.html
+__pycache__/
+*.pyc

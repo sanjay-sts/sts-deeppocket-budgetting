@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { errorMessage } from '../data/api';
 import type { CsvMapping, CsvPreview, ImportSummary, TxImportSummary } from '../data/api';
 
 export function Import() {
@@ -27,7 +28,7 @@ function InvestmentsImportCard() {
     try {
       setSummary(await importCsv(file));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -72,7 +73,7 @@ function TransactionsImportCard() {
     try {
       setSummary(await importTransactionsFile(file));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -159,7 +160,7 @@ function MappingWizardCard() {
       setCreditColumn(guess(p.headers, ['credit', 'deposit']));
       setAccountColumn(guess(p.headers, ['account', 'acct']));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -178,7 +179,7 @@ function MappingWizardCard() {
     try {
       setSummary(await importMapped(file, mapping));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

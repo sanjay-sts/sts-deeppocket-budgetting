@@ -1,5 +1,5 @@
 def test_create_and_list_person(client):
-    r = client.post("/api/people", json={"name": "Avery", "role": "adult", "birthYear": 1985})
+    r = client.post("/api/people", json={"name": "Jordan", "role": "adult", "birthYear": 1985})
     assert r.status_code == 201
     pid = r.json()["id"]
     assert r.json()["birthYear"] == 1985
@@ -10,9 +10,9 @@ def test_create_and_list_person(client):
 
 def test_update_person(client):
     pid = client.post("/api/people", json={"name": "Anu", "role": "adult"}).json()["id"]
-    r = client.put(f"/api/people/{pid}", json={"name": "Jordan"})
+    r = client.put(f"/api/people/{pid}", json={"name": "Avery"})
     assert r.status_code == 200
-    assert r.json()["name"] == "Jordan"
+    assert r.json()["name"] == "Avery"
 
 
 def test_delete_person_blocked_when_owns_account(client):
@@ -33,21 +33,21 @@ def test_delete_person_ok_when_no_deps(client):
 
 
 def test_create_account_defaults_kind_and_name(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     r = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "Cedarlife", "accountType": "dccp2"})
     assert r.status_code == 201
     body = r.json()
     assert body["kind"] == "dcpp"                   # dccp2 -> dcpp via KIND_MAP
     # Computed display name = owner(s) + institution + account type; no custom override.
-    assert body["name"] == "Avery Cedarlife dccp2"
+    assert body["name"] == "Jordan Cedarlife dccp2"
     assert "customName" not in body
     assert body["ownerIds"] == [pid]
     assert body["accountType"] == "dccp2"
 
 
 def test_create_account_natural_key_conflict(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     payload = {"personIds": [pid], "institution": "Mapletrade", "accountType": "tfsa"}
     assert client.post("/api/accounts", json=payload).status_code == 201
     assert client.post("/api/accounts", json=payload).status_code == 409
@@ -85,8 +85,8 @@ def test_delete_account_blocked_with_only_contribution(client):
 
 
 def test_create_joint_account_with_two_owners(client):
-    p1 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
-    p2 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p1 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p2 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
     r = client.post("/api/accounts", json={
         "personIds": [p1, p2], "institution": "TD", "accountType": "chequing"})
     assert r.status_code == 201
@@ -99,7 +99,7 @@ def test_create_joint_account_with_two_owners(client):
 
 
 def test_create_family_resp_with_two_beneficiaries(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     k1 = client.post("/api/people", json={"name": "Kid1", "role": "child"}).json()["id"]
     k2 = client.post("/api/people", json={"name": "Kid2", "role": "child"}).json()["id"]
     r = client.post("/api/accounts", json={
@@ -115,7 +115,7 @@ def test_create_family_resp_with_two_beneficiaries(client):
 
 
 def test_individual_resp_for_one_kid_coexists_with_family_resp(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     k1 = client.post("/api/people", json={"name": "Kid1", "role": "child"}).json()["id"]
     k2 = client.post("/api/people", json={"name": "Kid2", "role": "child"}).json()["id"]
     client.post("/api/accounts", json={
@@ -128,7 +128,7 @@ def test_individual_resp_for_one_kid_coexists_with_family_resp(client):
 
 
 def test_exact_duplicate_owner_and_beneficiary_set_still_conflicts(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     k1 = client.post("/api/people", json={"name": "Kid1", "role": "child"}).json()["id"]
     k2 = client.post("/api/people", json={"name": "Kid2", "role": "child"}).json()["id"]
     payload = {
@@ -141,8 +141,8 @@ def test_exact_duplicate_owner_and_beneficiary_set_still_conflicts(client):
 
 
 def test_delete_person_blocked_when_joint_owner(client):
-    p1 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
-    p2 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p1 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p2 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
     client.post("/api/accounts", json={
         "personIds": [p1, p2], "institution": "TD", "accountType": "chequing"})
     r = client.delete(f"/api/people/{p2}")
@@ -154,7 +154,7 @@ def test_delete_person_blocked_when_joint_owner(client):
 
 
 def test_delete_person_blocked_when_family_resp_co_beneficiary(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     k1 = client.post("/api/people", json={"name": "Kid1", "role": "child"}).json()["id"]
     k2 = client.post("/api/people", json={"name": "Kid2", "role": "child"}).json()["id"]
     client.post("/api/accounts", json={
@@ -169,7 +169,7 @@ def test_delete_person_blocked_when_family_resp_co_beneficiary(client):
 
 
 def test_delete_person_blocked_when_only_contribution(client):
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     contributor = client.post("/api/people", json={"name": "Contributor", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "WS", "accountType": "tfsa"}).json()["id"]
@@ -228,27 +228,27 @@ def test_delete_account_cascade_removes_dependents(client):
 
 def test_account_name_computed_from_single_owner(client):
     # (a) One owner, no custom name -> computed "{owner} {institution} {type}", no customName.
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "Blueleaf", "accountType": "tfsa"}).json()["id"]
 
     listed = next(a for a in client.get("/api/accounts").json() if a["id"] == aid)
-    assert listed["name"] == "Avery Blueleaf tfsa"
+    assert listed["name"] == "Jordan Blueleaf tfsa"
     assert "customName" not in listed
 
     data_acc = next(a for a in client.get("/api/data").json()["accounts"] if a["id"] == aid)
-    assert data_acc["name"] == "Avery Blueleaf tfsa"
+    assert data_acc["name"] == "Jordan Blueleaf tfsa"
     assert "customName" not in data_acc
 
 
 def test_account_name_joins_multiple_owners_with_comma(client):
     # (b) Joint account -> owner names comma-joined alphabetically, then institution + type.
-    p1 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
-    p2 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p1 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p2 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
         "personIds": [p1, p2], "institution": "Blueleaf", "accountType": "tfsa"}).json()["id"]
 
-    expected = "Jordan, Avery Blueleaf tfsa"
+    expected = "Avery, Jordan Blueleaf tfsa"
 
     listed = next(a for a in client.get("/api/accounts").json() if a["id"] == aid)
     assert listed["name"] == expected
@@ -257,7 +257,7 @@ def test_account_name_joins_multiple_owners_with_comma(client):
 
 def test_account_custom_name_on_create_and_update(client):
     # (c) Create with a name -> that custom string wins and customName is present.
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     r = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "WS", "accountType": "tfsa", "name": "My Rainy Day"})
     body = r.json()
@@ -273,49 +273,49 @@ def test_account_custom_name_on_create_and_update(client):
 
 def test_account_name_recomputes_when_owners_change(client):
     # (d) Changing the owner set recomputes the auto name.
-    p1 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
-    p2 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p1 = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    p2 = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
         "personIds": [p1], "institution": "WS", "accountType": "tfsa"}).json()["id"]
 
     updated = client.put(f"/api/accounts/{aid}", json={"personIds": [p1, p2]}).json()
-    assert updated["name"] == "Jordan, Avery WS tfsa"
+    assert updated["name"] == "Avery, Jordan WS tfsa"
     assert "customName" not in updated
 
 
 def test_account_name_recomputes_when_owner_renamed(client):
     # (e) Renaming a person via PUT /api/people recomputes the account name on next read.
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "WS", "accountType": "tfsa"}).json()["id"]
 
-    client.put(f"/api/people/{pid}", json={"name": "Avery S"})
+    client.put(f"/api/people/{pid}", json={"name": "Jordan S"})
 
     listed = next(a for a in client.get("/api/accounts").json() if a["id"] == aid)
-    assert listed["name"] == "Avery S WS tfsa"
+    assert listed["name"] == "Jordan S WS tfsa"
     data_acc = next(a for a in client.get("/api/data").json()["accounts"] if a["id"] == aid)
-    assert data_acc["name"] == "Avery S WS tfsa"
+    assert data_acc["name"] == "Jordan S WS tfsa"
 
 
 def test_account_name_blank_clears_custom_override(client):
     # (f) Updating the name to "" clears the override, reverting to the auto name.
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     aid = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "WS", "accountType": "tfsa", "name": "Custom"}).json()["id"]
     assert client.get("/api/accounts").json()[0]["customName"] == "Custom"
 
     reverted = client.put(f"/api/accounts/{aid}", json={"name": ""}).json()
-    assert reverted["name"] == "Avery WS tfsa"
+    assert reverted["name"] == "Jordan WS tfsa"
     assert "customName" not in reverted
 
 
 def test_account_whitespace_name_is_not_a_custom_override(client):
     # (g) Whitespace-only names are trimmed away: no override on create, and a
     # whitespace update clears an existing override just like "".
-    pid = client.post("/api/people", json={"name": "Avery", "role": "adult"}).json()["id"]
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
     created = client.post("/api/accounts", json={
         "personIds": [pid], "institution": "WS", "accountType": "tfsa", "name": "   "}).json()
-    assert created["name"] == "Avery WS tfsa"
+    assert created["name"] == "Jordan WS tfsa"
     assert "customName" not in created
 
     aid = created["id"]
@@ -324,7 +324,7 @@ def test_account_whitespace_name_is_not_a_custom_override(client):
     assert named["customName"] == "My Fund"
 
     reverted = client.put(f"/api/accounts/{aid}", json={"name": "   "}).json()
-    assert reverted["name"] == "Avery WS tfsa"
+    assert reverted["name"] == "Jordan WS tfsa"
     assert "customName" not in reverted
 
 

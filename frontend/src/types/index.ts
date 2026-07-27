@@ -13,6 +13,8 @@ export interface Person {
   name: string;
   role: PersonRole;
   birthYear?: number;
+  /** Annual gross income (issue #23). Undefined = not recorded, distinct from a recorded 0. */
+  grossIncome?: number;
 }
 
 export type AccountKind =

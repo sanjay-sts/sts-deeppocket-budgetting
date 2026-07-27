@@ -3,7 +3,7 @@ import io
 
 from sqlmodel import Session, select
 
-from ..constants import new_id, normalize_date, parse_amount
+from ..constants import csv_cell, new_id, normalize_date, parse_amount
 from ..models import Account, Category, Transaction
 from .categorize import categorize
 
@@ -22,7 +22,7 @@ def _parse_amount(row: dict, neg_col: str, pos_col: str) -> float:
     neg, pos = row.get(neg_col, ""), row.get(pos_col, "")
     if bool(neg) == bool(pos):
         raise ValueError(f"exactly one of {neg_col}/{pos_col} must have an amount")
-    return -float(neg) if neg else float(pos)
+    return -parse_amount(neg) if neg else parse_amount(pos)
 
 
 def _new_summary() -> dict:
@@ -94,7 +94,7 @@ def import_transactions_csv(text: str, session: Session) -> dict:
     transfer_categories = _transfer_category_ids(session)
 
     for i, raw in enumerate(reader, start=1):
-        row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw.items()}
+        row = {(k or "").strip().lower(): csv_cell(v) for k, v in raw.items()}
         try:
             date = normalize_date(row["date"])
             amount = _parse_amount(row, neg_col, pos_col)
@@ -128,7 +128,7 @@ def preview_transactions_csv(text: str, sample_size: int = 5) -> dict:
     for raw in reader:
         count += 1
         if len(sample_rows) < sample_size:
-            sample_rows.append({(k or "").strip(): (v or "").strip() for k, v in raw.items()})
+            sample_rows.append({(k or "").strip(): csv_cell(v) for k, v in raw.items()})
     return {"headers": headers, "sampleRows": sample_rows, "rowCount": count}
 
 
@@ -181,7 +181,7 @@ def import_transactions_csv_mapped(text: str, mapping, session: Session) -> dict
     transfer_categories = _transfer_category_ids(session)
 
     for i, raw in enumerate(reader, start=1):
-        row = {(k or "").strip(): (v or "").strip() for k, v in raw.items()}
+        row = {(k or "").strip(): csv_cell(v) for k, v in raw.items()}
         try:
             date = _parse_mapped_date(row.get(mapping.dateColumn, ""), mapping.dayFirst)
             raw_merchant = row.get(mapping.merchantColumn, "")

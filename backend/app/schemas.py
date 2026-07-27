@@ -6,12 +6,16 @@ class PersonCreate(BaseModel):
     name: str
     role: str = "adult"
     birthYear: Optional[int] = None
+    grossIncome: Optional[float] = None
 
 
 class PersonUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     birthYear: Optional[int] = None
+    # Nullable AND clearable: callers distinguish "leave alone" (key absent) from
+    # "clear it" (explicit null) via model_fields_set in the router.
+    grossIncome: Optional[float] = None
 
 
 class AccountCreate(BaseModel):

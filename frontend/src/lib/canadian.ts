@@ -10,6 +10,12 @@ export interface RoomUsed {
   usedYtd: number;
   annualLimit: number;
   remaining: number;
+  /**
+   * False only for RRSP rows whose owner has no recorded income and no CRA-stated room —
+   * their limit is unknowable, which is different from a limit of zero. Screens must not
+   * render a percentage for these.
+   */
+  limitKnown: boolean;
 }
 
 export function contributionRoomUsed(
@@ -46,12 +52,14 @@ export function contributionRoomUsed(
     const [personId, kind] = key.split('::') as [PersonId, 'tfsa' | 'rrsp' | 'fhsa'];
     const stated = statedByKey.get(key);
     let annualLimit = 0;
+    let limitKnown = true;
     if (stated !== undefined) annualLimit = stated;
     else if (kind === 'tfsa') annualLimit = limits.TFSA_ANNUAL;
     else if (kind === 'fhsa') annualLimit = limits.FHSA_ANNUAL;
     else if (kind === 'rrsp') {
-      const earned = rrspEarnedIncomePriorYear[personId] ?? 0;
-      annualLimit = Math.min(limits.RRSP_ANNUAL_CAP, earned * limits.RRSP_ANNUAL_PCT);
+      const earned = rrspEarnedIncomePriorYear[personId];
+      limitKnown = earned !== undefined;
+      annualLimit = Math.min(limits.RRSP_ANNUAL_CAP, (earned ?? 0) * limits.RRSP_ANNUAL_PCT);
     }
     out.push({
       kind,
@@ -59,6 +67,7 @@ export function contributionRoomUsed(
       usedYtd: Math.round(used * 100) / 100,
       annualLimit: Math.round(annualLimit),
       remaining: Math.max(0, annualLimit - used),
+      limitKnown,
     });
   }
 
@@ -69,6 +78,7 @@ export function contributionRoomUsed(
       usedYtd: Math.round(used * 100) / 100,
       annualLimit: limits.RESP_ANNUAL_FOR_FULL_CESG,
       remaining: Math.max(0, limits.RESP_ANNUAL_FOR_FULL_CESG - used),
+      limitKnown: true,
     });
   }
 
@@ -120,6 +130,9 @@ export function cesgStatusPerKid(
 // Rough marginal-rate hint for Ontario 2025 — enough for a "your refund would be ~$X" nudge.
 // Not tax advice; displayed as an estimate only.
 const ON_MARGINAL_2025: Array<{ upTo: number; rate: number }> = [
+  // Below the basic personal amount no tax is payable, so an RRSP deduction refunds
+  // nothing — without this tier a non-earner is shown a fictitious refund.
+  { upTo: 15705, rate: 0 },
   { upTo: 55867, rate: 0.2005 },
   { upTo: 90000, rate: 0.2415 },
   { upTo: 111733, rate: 0.2965 },
@@ -137,33 +150,36 @@ export function estimateMarginalRate(annualIncome: number): number {
   return 0.5353;
 }
 
-// Until household members carry a stored income (issue #23), every adult is assumed
-// to earn this when estimating RRSP room and the marginal rate. Estimate only.
-export const ASSUMED_ADULT_INCOME = 100_000;
-
 export interface RrspOpportunity {
   personId: PersonId;
   name: string;
   remaining: number;
   marginalRate: number;
   refund: number;
+  /** False when this member has no recorded income, so room/refund can't be estimated. */
+  incomeKnown: boolean;
 }
 
-// Refund nudge per household adult (issue #22). Unlike contributionRoomUsed, adults
-// with no recorded contributions still get a row — their full annual limit is open.
+// Refund nudge per household adult (issue #22), driven by each member's own stored income
+// (issue #23). Unlike contributionRoomUsed, adults with no recorded contributions still get
+// a row — their full annual limit is open. An adult with no recorded income reports
+// incomeKnown: false rather than a made-up figure; the screen prompts for it instead.
 export function rrspRefundOpportunities(
   household: Person[],
   events: ContributionEvent[],
   year: number,
   limits: CraLimits,
-  income: number = ASSUMED_ADULT_INCOME,
   statedRoom: StatedRoom[] = [],
 ): RrspOpportunity[] {
-  const annualLimit = Math.min(limits.RRSP_ANNUAL_CAP, income * limits.RRSP_ANNUAL_PCT);
-  const marginalRate = estimateMarginalRate(income);
   return household
     .filter((p) => p.role === 'adult')
     .map((p) => {
+      const incomeKnown = typeof p.grossIncome === 'number';
+      const income = p.grossIncome ?? 0;
+      const annualLimit = incomeKnown
+        ? Math.min(limits.RRSP_ANNUAL_CAP, income * limits.RRSP_ANNUAL_PCT)
+        : 0;
+      const marginalRate = incomeKnown ? estimateMarginalRate(income) : 0;
       // CRA-stated room (incl. carry-forward, issue #25) beats the income estimate.
       const stated = statedRoom.find((s) => s.personId === p.id && s.kind === 'rrsp')?.amount;
       const limit = stated ?? annualLimit;
@@ -171,6 +187,9 @@ export function rrspRefundOpportunities(
         .filter((e) => e.kind === 'rrsp' && e.personId === p.id && e.date.startsWith(String(year)))
         .reduce((a, e) => a + e.amount, 0);
       const remaining = Math.max(0, Math.round((limit - used) * 100) / 100);
-      return { personId: p.id, name: p.name, remaining, marginalRate, refund: remaining * marginalRate };
+      return {
+        personId: p.id, name: p.name, remaining, marginalRate,
+        refund: remaining * marginalRate, incomeKnown,
+      };
     });
 }

@@ -37,6 +37,7 @@ def seed(session: Session, investments: str = "demo") -> None:
     for p in base["household"]:
         _upsert(session, Person, p["id"], {
             "name": p["name"], "role": p["role"], "birth_year": p.get("birthYear"),
+            "gross_income": p.get("grossIncome"),
         })
     session.commit()
 

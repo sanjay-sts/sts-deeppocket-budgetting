@@ -9,6 +9,8 @@ const BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 export class ApiError extends Error {
   status: number;
   body: unknown;
+  /** The server's own explanation, without the HTTP status prefix — safe to show a user. */
+  detail: string;
   constructor(status: number, statusText: string, body: unknown) {
     const detail =
       typeof body === 'object' && body !== null && 'detail' in (body as Record<string, unknown>)
@@ -19,7 +21,14 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
     this.body = body;
+    this.detail = message;
   }
+}
+
+/** Text to show a user for a failed request: the server's explanation when there is one. */
+export function errorMessage(e: unknown): string {
+  if (e instanceof ApiError && e.detail) return e.detail;
+  return e instanceof Error ? e.message : String(e);
 }
 
 async function json<T>(res: Response): Promise<T> {
@@ -42,7 +51,14 @@ export async function loadFixtures(): Promise<Fixtures> {
 
 import type { Person, Account } from '../types';
 
-interface PersonInput { name: string; role: 'adult' | 'child'; birthYear?: number }
+export interface PersonInput {
+  name: string;
+  role: 'adult' | 'child';
+  /** Omit to leave alone on update; send null to clear the stored year. */
+  birthYear?: number | null;
+  /** Omit to leave unset on create; send null on update to clear a recorded income. */
+  grossIncome?: number | null;
+}
 interface AccountInput {
   personIds: string[]; institution: string; accountType: string;
   kind?: string; name?: string; isLiability?: boolean; beneficiaryIds?: string[];

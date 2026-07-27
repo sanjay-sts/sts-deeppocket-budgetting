@@ -6,7 +6,7 @@ HEADER = "date,person,institution,account_type,amount\n"
 
 
 def test_import_creates_people_accounts_snapshots(session):
-    csv_text = HEADER + "20250131,avery,mapletrade,tfsa,10000\n20250131,jordan,blueleaf,rrsp,5000\n"
+    csv_text = HEADER + "20250131,jordan,mapletrade,tfsa,10000\n20250131,avery,blueleaf,rrsp,5000\n"
     summary = import_investment_csv(csv_text, session)
     assert summary["created"] == 2
     assert summary["skipped"] == 0
@@ -16,28 +16,28 @@ def test_import_creates_people_accounts_snapshots(session):
 
 
 def test_import_matches_person_case_insensitively(session):
-    session.add(Person(id="p1", name="Avery", role="adult"))
+    session.add(Person(id="p1", name="Jordan", role="adult"))
     session.commit()
-    import_investment_csv(HEADER + "20250131,avery,mapletrade,tfsa,10000\n", session)
-    assert len(session.exec(select(Person)).all()) == 1  # matched existing "Avery"
+    import_investment_csv(HEADER + "20250131,jordan,mapletrade,tfsa,10000\n", session)
+    assert len(session.exec(select(Person)).all()) == 1  # matched existing "Jordan"
 
 
 def test_import_upserts_by_account_date(session):
-    import_investment_csv(HEADER + "20250131,avery,mapletrade,tfsa,10000\n", session)
-    summary = import_investment_csv(HEADER + "2025-01-31,avery,mapletrade,tfsa,12000\n", session)
+    import_investment_csv(HEADER + "20250131,jordan,mapletrade,tfsa,10000\n", session)
+    summary = import_investment_csv(HEADER + "2025-01-31,jordan,mapletrade,tfsa,12000\n", session)
     assert summary["updated"] == 1
     snaps = session.exec(select(InvestmentSnapshot)).all()
     assert len(snaps) == 1 and snaps[0].amount == 12000.0
 
 
 def test_import_infers_kind_from_free_text_type(session):
-    import_investment_csv(HEADER + "20250131,avery,cedarlife,dccp2,42000\n", session)
+    import_investment_csv(HEADER + "20250131,jordan,cedarlife,dccp2,42000\n", session)
     acc = session.exec(select(Account)).first()
     assert acc.account_type == "dccp2" and acc.kind == "dcpp"
 
 
 def test_import_parses_currency_formatted_amounts(session):
-    csv_text = HEADER + '20250131,avery,mapletrade,tfsa,"189,301.43"\n20250131,jordan,rbc,rrsp,"$1,234.56"\n'
+    csv_text = HEADER + '20250131,jordan,mapletrade,tfsa,"189,301.43"\n20250131,avery,rbc,rrsp,"$1,234.56"\n'
     summary = import_investment_csv(csv_text, session)
     assert summary["created"] == 2
     assert summary["skipped"] == 0
@@ -46,7 +46,7 @@ def test_import_parses_currency_formatted_amounts(session):
 
 
 def test_import_reports_bad_rows(session):
-    summary = import_investment_csv(HEADER + "BADDATE,avery,mapletrade,tfsa,100\n", session)
+    summary = import_investment_csv(HEADER + "BADDATE,jordan,mapletrade,tfsa,100\n", session)
     assert summary["skipped"] == 1
     assert summary["errors"][0]["row"] == 1
 
@@ -57,7 +57,7 @@ def test_import_rejects_wrong_header(session):
 
 
 def test_import_endpoint_multipart(client):
-    csv_bytes = (HEADER + "20250131,avery,mapletrade,tfsa,10000\n").encode("utf-8")
+    csv_bytes = (HEADER + "20250131,jordan,mapletrade,tfsa,10000\n").encode("utf-8")
     r = client.post(
         "/api/import/investments-csv",
         files={"file": ("snap.csv", csv_bytes, "text/csv")},
