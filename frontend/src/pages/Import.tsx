@@ -81,6 +81,37 @@ function UnknownAccountsCallout({
   );
 }
 
+/**
+ * Row errors, with identical reasons collapsed.
+ *
+ * One bad account name in a 400-row export produced 400 identical lines, which buried the
+ * few errors that differed. Grouping keeps the row numbers (the first few, so a row is
+ * still findable) without repeating the reason.
+ */
+function ImportErrors({ errors }: { errors: { row: number; reason: string }[] }) {
+  if (!errors.length) return null;
+
+  const groups = new Map<string, number[]>();
+  for (const e of errors) {
+    const rows = groups.get(e.reason);
+    if (rows) rows.push(e.row);
+    else groups.set(e.reason, [e.row]);
+  }
+
+  return (
+    <ul className="mt-2 text-down list-disc pl-5">
+      {[...groups].map(([reason, rows]) => (
+        <li key={reason}>
+          {rows.length === 1
+            ? `Row ${rows[0]}`
+            : `${rows.length} rows (${rows.slice(0, 3).join(', ')}${rows.length > 3 ? ', …' : ''})`}
+          : {reason}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Opening balances the import worked out from a running-total column, plus any drift. */
 function BalanceNotes({ summary }: { summary: TxImportSummary }) {
   const fixtures = useAppStore((s) => s.fixtures);
@@ -96,9 +127,11 @@ function BalanceNotes({ summary }: { summary: TxImportSummary }) {
       ))}
       {summary.reconciliation.map((b) => (
         <p key={`rec-${b.accountId}`} className="text-down text-xs mt-1">
-          {nameOf(b.accountId)} doesn&rsquo;t reconcile: the running total reports{' '}
-          {cad(b.reported, true)} but the imported transactions add up to {cad(b.expected, true)}{' '}
-          — a gap of {cad(Math.abs(b.drift), true)}. Some history is probably missing.
+          {nameOf(b.accountId)} doesn&rsquo;t fully reconcile: {b.unreconciledDates}{' '}
+          statement {b.unreconciledDates === 1 ? 'date' : 'dates'} can&rsquo;t be squared with the
+          transactions on record, the largest gap being {cad(Math.abs(b.drift), true)}. Some
+          history is probably missing — check for a statement you haven&rsquo;t imported, or for
+          repeated identical rows that were skipped as duplicates.
         </p>
       ))}
     </>
@@ -139,11 +172,7 @@ function InvestmentsImportCard() {
       {summary && (
         <div className="text-sm text-ink-muted">
           <p>Created {summary.created} · Updated {summary.updated} · Skipped {summary.skipped}</p>
-          {summary.errors.length > 0 && (
-            <ul className="mt-2 text-down list-disc pl-5">
-              {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
-            </ul>
-          )}
+          <ImportErrors errors={summary.errors} />
         </div>
       )}
     </Card>
@@ -193,11 +222,7 @@ function TransactionsImportCard() {
           </p>
           <BalanceNotes summary={summary} />
           <UnknownAccountsCallout summary={summary} onRetry={run} />
-          {summary.errors.length > 0 && (
-            <ul className="mt-2 text-down list-disc pl-5">
-              {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
-            </ul>
-          )}
+          <ImportErrors errors={summary.errors} />
         </div>
       )}
     </Card>
@@ -450,11 +475,7 @@ function MappingWizardCard() {
           </p>
           <BalanceNotes summary={summary} />
           <UnknownAccountsCallout summary={summary} onRetry={run} />
-          {summary.errors.length > 0 && (
-            <ul className="mt-2 text-down list-disc pl-5">
-              {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
-            </ul>
-          )}
+          <ImportErrors errors={summary.errors} />
         </div>
       )}
     </Card>

@@ -61,7 +61,11 @@ export function AccountForm({
   // The account type doubles as the display-name suffix, so default it to the kind rather
   // than making the user retype "credit_card" to get a sensible auto name.
   const effectiveType = accountType.trim() || kind;
-  const preview = autoName(personIds, institution, effectiveType, people);
+  // Only preview the auto name once there is an owner and an institution — before that it
+  // would just echo the kind back, which reads like a stray value rather than a name.
+  const preview = personIds.length && institution.trim()
+    ? autoName(personIds, institution, effectiveType, people)
+    : '';
   const owesLabel = kind === 'credit_card';
 
   async function submit() {

@@ -94,9 +94,43 @@ def test_a_gap_in_the_history_is_reported_as_drift(session):
     assert len(summary["reconciliation"]) == 1
     drift = summary["reconciliation"][0]
     assert drift["accountId"] == "visa"
-    assert drift["reported"] == 999.99
-    assert drift["expected"] == 313.27
+    # The two dates imply openings 686.72 apart, so one of them can't be right.
+    assert drift["unreconciledDates"] == 1
     assert drift["drift"] == 686.72
+
+
+def test_many_rows_on_one_date_still_derive_correctly(session):
+    """Transactions carry no intra-day sequence, so same-date rows must not be walked in order.
+
+    Sorting by (date, id) put an arbitrary same-date row 'first' and summed the wrong subset
+    before it, which threw the opening balance out by the rest of that day's spending.
+    """
+    _setup(session)
+    # Four purchases on one date, then one the next day. Running totals are sequential.
+    csv_text = """09/17/2025,A,10.00,,110.00
+09/17/2025,B,20.00,,130.00
+09/17/2025,C,30.00,,160.00
+09/17/2025,D,40.00,,200.00
+09/18/2025,E,5.00,,205.00
+"""
+    summary = import_transactions_csv_mapped(csv_text, _cc_mapping(), session)
+    # 110.00 owed after the first 10.00 purchase means 100.00 owed to begin with.
+    assert session.get(Account, "visa").opening_balance == 100.0
+    assert summary["reconciliation"] == []
+
+
+def test_a_dropped_duplicate_shows_up_as_unreconciled_history(session):
+    """Two genuinely identical same-day rows dedup to one, which the running totals expose."""
+    _setup(session)
+    csv_text = """09/17/2025,VENDING,3.00,,103.00
+09/17/2025,VENDING,3.00,,106.00
+09/18/2025,COFFEE,5.00,,111.00
+"""
+    summary = import_transactions_csv_mapped(csv_text, _cc_mapping(), session)
+    assert summary["created"] == 2 and summary["duplicates"] == 1  # one VENDING row dropped
+    # The 09/18 total can no longer be squared with the transactions on record, so the
+    # import says so rather than quietly reporting a balance that is $3 light.
+    assert summary["reconciliation"][0]["drift"] == 3.0
 
 
 def test_a_single_running_total_derives_nothing(session):

@@ -53,9 +53,14 @@ async def import_transactions_csv_endpoint(
 
 
 @router.post("/transactions-csv/preview")
-async def preview_transactions_csv_endpoint(file: UploadFile = File(...)) -> dict:
+async def preview_transactions_csv_endpoint(
+    file: UploadFile = File(...),
+    # Omit to let the preview guess whether the file has a header row; send true/false to
+    # override that guess, so the user can correct it and see the columns re-read.
+    headerless: bool | None = Form(None),
+) -> dict:
     text = decode_upload(await file.read())
-    return _parse(preview_transactions_csv, text)
+    return _parse(preview_transactions_csv, text, 5, headerless)
 
 
 @router.post("/transactions-csv/mapped")

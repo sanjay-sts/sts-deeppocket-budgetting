@@ -185,10 +185,10 @@ export interface OpeningBalanceChange {
   accountId: string;
   openingBalance: number;
   previousOpeningBalance: number;
-  /** Where walking the transactions forward lands, vs what the newest row reports. */
-  expected: number;
-  reported: number;
+  /** Largest gap between what a statement date reports and the transactions on record. */
   drift: number;
+  /** How many statement dates can't be squared with those transactions. 0 = reconciled. */
+  unreconciledDates: number;
 }
 
 export interface TxImportSummary {

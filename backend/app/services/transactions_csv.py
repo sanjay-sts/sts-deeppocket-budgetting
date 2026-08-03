@@ -245,18 +245,21 @@ def looks_headerless(first_row: list[str]) -> bool:
     return sum(1 for c in first_row if _looks_like_amount(c)) >= 2
 
 
-def preview_transactions_csv(text: str, sample_size: int = 5) -> dict:
+def preview_transactions_csv(
+    text: str, sample_size: int = 5, headerless: bool | None = None,
+) -> dict:
     """Parse the header row and a few sample rows so the UI can build a column mapping.
 
     On a headerless file the columns are named col1..colN and the first row is returned as
-    data, not swallowed as names.
+    data, not swallowed as names. `headerless` overrides the guess when the user corrects it.
     """
     rows = list(csv.reader(io.StringIO(text)))
     rows = [r for r in rows if any((c or "").strip() for c in r)]
     if not rows:
         return {"headers": [], "sampleRows": [], "rowCount": 0, "headerless": False}
 
-    headerless = looks_headerless(rows[0])
+    if headerless is None:
+        headerless = looks_headerless(rows[0])
     if headerless:
         width = max(len(r) for r in rows)
         headers = positional_headers(width)
