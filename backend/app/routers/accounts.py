@@ -3,7 +3,9 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..constants import new_id, normalize_kind
-from ..models import Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution
+from ..models import (
+    Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution, Transaction,
+)
 from ..schemas import AccountCreate, AccountUpdate
 from ..services.deletion import cascade_delete_account
 from ..services.fixtures import _account_out
@@ -29,6 +31,18 @@ def _out(session: Session, a: Account) -> dict:
         (p.name if (p := session.get(Person, pid)) else pid) for pid in owner_ids
     )
     return _account_out(a, owner_ids, _account_beneficiary_ids(session, a.id), owner_names)
+
+
+def _resolve_liability(kind: str, requested: bool | None) -> bool:
+    """A credit card is always a liability, whatever the client sent.
+
+    Net worth subtracts liabilities and lib/kpi.ts inverts credit-card sums for display,
+    so a card recorded as an asset silently corrupts both. Deriving it here means no
+    caller can get it wrong; every other kind honours the flag as sent.
+    """
+    if kind == "credit_card":
+        return True
+    return bool(requested)
 
 
 def _natural_key_exists(
@@ -69,7 +83,8 @@ def create_account(body: AccountCreate, session: Session = Depends(get_session))
         id=new_id("acc"), institution=body.institution,
         account_type=body.accountType, kind=kind,
         custom_name=(body.name or "").strip() or None,
-        is_liability=body.isLiability,
+        is_liability=_resolve_liability(kind, body.isLiability),
+        opening_balance=body.openingBalance or 0.0,
     )
     session.add(a)
     for pid in body.personIds:
@@ -100,6 +115,11 @@ def update_account(account_id: str, body: AccountUpdate, session: Session = Depe
         a.custom_name = body.name.strip() or None
     if body.isLiability is not None:
         a.is_liability = body.isLiability
+    # Re-derive after any kind/flag change: switching an account to credit_card has to make
+    # it a liability even when the client sent no flag at all.
+    a.is_liability = _resolve_liability(a.kind, a.is_liability)
+    if body.openingBalance is not None:
+        a.opening_balance = body.openingBalance
 
     if body.personIds is not None:
         if not body.personIds:
@@ -142,11 +162,14 @@ def delete_account(account_id: str, cascade: bool = False, session: Session = De
             select(InvestmentSnapshot).where(InvestmentSnapshot.account_id == account_id)).all())
         contribution_count = len(session.exec(
             select(Contribution).where(Contribution.account_id == account_id)).all())
-        if snapshot_count or contribution_count:
+        transaction_count = len(session.exec(
+            select(Transaction).where(Transaction.account_id == account_id)).all())
+        if snapshot_count or contribution_count or transaction_count:
             raise HTTPException(409, detail={
                 "message": "This account still has dependent data. Remove it first.",
                 "snapshotCount": snapshot_count,
                 "contributionCount": contribution_count,
+                "transactionCount": transaction_count,
             })
     # Force-delete ("Delete anyway") and the no-dependents success path both flow here.
     # On the non-cascade path there are zero snapshots/contributions, so the helper just

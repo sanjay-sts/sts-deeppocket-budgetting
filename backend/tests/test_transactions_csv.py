@@ -69,6 +69,9 @@ def test_reimport_is_idempotent(session):
     assert summary == {
         "created": 0, "duplicates": 2, "skipped": 0, "errors": [],
         "categorized": {"history": 0, "rules": 0, "unclassified": 0},
+        "format": "bank", "unknownAccounts": [],
+        # Second run derives the same opening balance, so nothing moved and nothing drifted.
+        "openingBalances": [], "reconciliation": [],
     }
     assert len(session.exec(select(Transaction)).all()) == 2
 

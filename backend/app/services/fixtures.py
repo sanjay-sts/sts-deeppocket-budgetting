@@ -178,6 +178,11 @@ def build_payload(session: Session) -> dict:
             "generatedAt": meta_rows.get("generatedAt", ""),
             "seed": int(meta_rows.get("seed", "0")),
             "monthsCovered": int(meta_rows.get("monthsCovered", "0")),
+            # Balance before the first recorded transaction, bank kinds only. The MEANING
+            # is per-kind: cash on hand for chequing/savings/cash, amount OWED (positive)
+            # for a credit card — the same inversion lib/kpi.ts already applies when it
+            # displays a card. Derived from a statement's running total when one was
+            # imported (services/opening_balance.py), else whatever the user entered.
             "openingBalances": {
                 a.id: a.opening_balance for a in accounts if a.kind in BANK_KINDS
             },

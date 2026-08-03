@@ -26,6 +26,10 @@ class AccountCreate(BaseModel):
     name: Optional[str] = None
     isLiability: bool = False
     beneficiaryIds: list[str] = []
+    # Balance before the first recorded transaction. Cash on hand for chequing/savings/cash,
+    # amount OWED (positive) for a credit card — see services/opening_balance.py. A statement
+    # carrying a running total overwrites whatever is set here.
+    openingBalance: Optional[float] = None
 
 
 class AccountUpdate(BaseModel):
@@ -36,6 +40,7 @@ class AccountUpdate(BaseModel):
     isLiability: Optional[bool] = None
     personIds: Optional[list[str]] = None
     beneficiaryIds: Optional[list[str]] = None
+    openingBalance: Optional[float] = None
 
 
 class SnapshotUpsert(BaseModel):
@@ -184,13 +189,22 @@ class TransactionCsvMapping(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     dateColumn: str
-    merchantColumn: str
+    # Optional: some exports are just date/debit/credit/balance with no description at all,
+    # in which case rows import as "(no description)".
+    merchantColumn: Optional[str] = None
     # amount: EITHER a single signed column, OR a debit/credit split — validated in the service.
     amountColumn: Optional[str] = None
     amountInvert: bool = False
     debitColumn: Optional[str] = None
     creditColumn: Optional[str] = None
-    # account: EITHER a column holding the account id, OR a fixed account id for every row.
+    # account: EITHER a column holding the account id or name, OR a fixed account for every row.
     accountColumn: Optional[str] = None
     accountId: Optional[str] = None
     dayFirst: bool = False
+    # The statement's balance-after-each-transaction column. Feeds opening-balance derivation
+    # and the import's reconciliation check (services/opening_balance.py).
+    runningTotalColumn: Optional[str] = None
+    # True when the file has no header row, so columns are addressed positionally as
+    # col1..colN. Echoed back from the preview, which guesses it, so the import reads the
+    # file exactly the way the preview displayed it.
+    headerless: bool = False
