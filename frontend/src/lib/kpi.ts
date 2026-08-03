@@ -121,11 +121,16 @@ export function latestCreditCardOwing(fixtures: Fixtures): AccountBalance[] {
   const result: AccountBalance[] = [];
   for (const acc of fixtures.accounts) {
     if (acc.kind !== 'credit_card') continue;
+    // For a card, meta.openingBalances holds the amount OWED before the first recorded
+    // transaction (positive), already in display orientation — so it adds rather than
+    // needing the inversion below. Without it, importing part of a card's history reports
+    // only what those rows spent, not what the card actually owes.
+    const opening = fixtures.meta.openingBalances[acc.id] ?? 0;
     const delta = fixtures.transactions
       .filter((t) => t.accountId === acc.id)
       .reduce((a, t) => a + t.amount, 0);
     // CC internal sum is negative when balance is owed; invert for display.
-    result.push({ accountId: acc.id, balance: round2(-delta) });
+    result.push({ accountId: acc.id, balance: round2(opening - delta) });
   }
   return result;
 }
@@ -294,11 +299,16 @@ export function netWorthTrend(fixtures: Fixtures): NetWorthPoint[] {
       .filter((t) => cashAccountIds.has(t.accountId) && monthKey(t.date) <= ym)
       .reduce((a, t) => a + t.amount, 0);
 
-    // Liabilities: CC net (internal negative → invert)
+    // Liabilities: card opening balances (already owed-positive) + CC net (internal
+    // negative → invert). Clamped at zero so an overpaid card never reads as an asset.
+    let ccOpening = 0;
+    for (const [accId, open] of Object.entries(fixtures.meta.openingBalances)) {
+      if (ccAccountIds.has(accId)) ccOpening += open;
+    }
     const ccDelta = fixtures.transactions
       .filter((t) => ccAccountIds.has(t.accountId) && monthKey(t.date) <= ym)
       .reduce((a, t) => a + t.amount, 0);
-    const liabilities = Math.max(0, -ccDelta);
+    const liabilities = Math.max(0, ccOpening - ccDelta);
 
     // Investments = sum of latest snapshot for this month per account
     const thisMonthSnaps = fixtures.investments.filter((s) => monthKey(s.date) === ym);

@@ -22,6 +22,7 @@ interface ConfirmDeleteModalProps {
 const COUNT_LABELS: Record<string, [string, string]> = {
   snapshotCount: ['snapshot', 'snapshots'],
   contributionCount: ['contribution', 'contributions'],
+  transactionCount: ['transaction', 'transactions'],
   ownedAccountCount: ['owned account', 'owned accounts'],
   beneficiaryAccountCount: ['beneficiary account', 'beneficiary accounts'],
 };

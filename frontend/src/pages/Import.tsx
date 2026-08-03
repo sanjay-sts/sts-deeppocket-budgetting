@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { AccountForm } from '../components/shared/AccountForm';
 import { errorMessage } from '../data/api';
+import { cad } from '../lib/format';
 import type { CsvMapping, CsvPreview, ImportSummary, TxImportSummary } from '../data/api';
+import type { AccountKind } from '../types';
 
 export function Import() {
   return (
@@ -12,6 +15,93 @@ export function Import() {
       <TransactionsImportCard />
       <MappingWizardCard />
     </div>
+  );
+}
+
+/**
+ * Offers to create each account the CSV named but that doesn't exist, then re-runs the
+ * import — so an unrecognised account is fixed in place instead of by editing the file.
+ */
+function UnknownAccountsCallout({
+  summary, onRetry,
+}: {
+  summary: TxImportSummary;
+  onRetry: () => Promise<void>;
+}) {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const addAccount = useAppStore((s) => s.addAccount);
+  const [creating, setCreating] = useState<string | null>(null);
+
+  if (!summary.unknownAccounts.length || !fixtures) return null;
+
+  const institutions = [...new Set(fixtures.accounts.map((a) => a.institution))].sort();
+  // A credit-card file's missing account is a credit card; anything else is a guess, so
+  // default to chequing and let the user change it.
+  const kind: AccountKind = summary.format === 'credit_card' ? 'credit_card' : 'chequing';
+
+  return (
+    <div className="mt-3 border border-line rounded-lg p-3 bg-bg-elev">
+      <p className="text-sm text-ink">
+        {summary.unknownAccounts.length === 1
+          ? 'One account named in this file doesn’t exist yet.'
+          : `${summary.unknownAccounts.length} accounts named in this file don’t exist yet.`}
+        {' '}Create it and the skipped rows will import.
+      </p>
+      <ul className="mt-2 space-y-2">
+        {summary.unknownAccounts.map((label) => (
+          <li key={label}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <code className="text-xs text-ink-muted">{label}</code>
+              <Button variant="secondary" onClick={() => setCreating(creating === label ? null : label)}>
+                {creating === label ? 'Cancel' : 'Create account'}
+              </Button>
+            </div>
+            {creating === label && (
+              <div className="mt-2">
+                <AccountForm
+                  people={fixtures.household}
+                  institutions={institutions}
+                  defaultKind={kind}
+                  // Named exactly as the CSV names it, so the retry resolves by name.
+                  defaultName={label}
+                  submitLabel="Create and import"
+                  onCancel={() => setCreating(null)}
+                  onSubmit={async (input) => {
+                    await addAccount(input);
+                    setCreating(null);
+                    await onRetry();
+                  }}
+                />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Opening balances the import worked out from a running-total column, plus any drift. */
+function BalanceNotes({ summary }: { summary: TxImportSummary }) {
+  const fixtures = useAppStore((s) => s.fixtures);
+  const nameOf = (id: string) => fixtures?.accounts.find((a) => a.id === id)?.name ?? id;
+
+  return (
+    <>
+      {summary.openingBalances.map((b) => (
+        <p key={`ob-${b.accountId}`} className="text-xs text-ink-dim mt-1">
+          Opening balance for {nameOf(b.accountId)} set to {cad(b.openingBalance, true)} from the
+          statement&rsquo;s running total (was {cad(b.previousOpeningBalance, true)}).
+        </p>
+      ))}
+      {summary.reconciliation.map((b) => (
+        <p key={`rec-${b.accountId}`} className="text-down text-xs mt-1">
+          {nameOf(b.accountId)} doesn&rsquo;t reconcile: the running total reports{' '}
+          {cad(b.reported, true)} but the imported transactions add up to {cad(b.expected, true)}{' '}
+          — a gap of {cad(Math.abs(b.drift), true)}. Some history is probably missing.
+        </p>
+      ))}
+    </>
   );
 }
 
@@ -85,7 +175,8 @@ function TransactionsImportCard() {
       <p className="text-sm text-ink-dim mb-3">
         Auto-detected formats: bank (<code>Date, Transaction_detail, withdrawal, deposit, running_total, account</code>)
         or credit card (<code>Date, merchant, amount, payment, running_total, account</code>).
-        The <code>account</code> column must match an existing account id. Re-importing the same rows is safe — duplicates are skipped.
+        The <code>account</code> column can be an account&rsquo;s id or its name. Re-importing the same rows is
+        safe — duplicates are skipped. No header row? Use the column-mapping wizard below.
       </p>
       <div className="flex gap-2 items-center mb-3">
         <input type="file" accept=".csv,text/csv" className="text-sm text-ink-muted" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -100,6 +191,8 @@ function TransactionsImportCard() {
           <p className="text-xs text-ink-dim mt-1">
             Categorized — history {summary.categorized.history} · rules {summary.categorized.rules} · unclassified {summary.categorized.unclassified}
           </p>
+          <BalanceNotes summary={summary} />
+          <UnknownAccountsCallout summary={summary} onRetry={run} />
           {summary.errors.length > 0 && (
             <ul className="mt-2 text-down list-disc pl-5">
               {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
@@ -135,6 +228,9 @@ function MappingWizardCard() {
   const [accountColumn, setAccountColumn] = useState('');
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
   const [dayFirst, setDayFirst] = useState(false);
+  const [runningTotalColumn, setRunningTotalColumn] = useState('');
+  // Guessed by the preview and echoed back on import, so the columns line up either way.
+  const [headerless, setHeaderless] = useState(false);
 
   const selectClass = 'bg-bg-elev border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-brand';
 
@@ -147,18 +243,46 @@ function MappingWizardCard() {
     return '';
   }
 
-  async function loadPreview(f: File) {
+  // A headerless file has no words to match on, so guess by position instead. The two shapes
+  // real bank exports ship in are date/description/debit/credit/balance and the same without
+  // a description; both end with the running total.
+  function guessPositional(headers: string[]) {
+    const last = headers[headers.length - 1] ?? '';
+    setDateColumn(headers[0] ?? '');
+    setAmountMode('split');
+    setAmountColumn('');
+    if (headers.length >= 5) {
+      setMerchantColumn(headers[1] ?? '');
+      setDebitColumn(headers[2] ?? '');
+      setCreditColumn(headers[3] ?? '');
+    } else {
+      setMerchantColumn('');
+      setDebitColumn(headers[1] ?? '');
+      setCreditColumn(headers[2] ?? '');
+    }
+    setRunningTotalColumn(last);
+    setAccountMode('fixed');
+    setAccountColumn('');
+  }
+
+  async function loadPreview(f: File, headerlessOverride?: boolean) {
     setError(''); setSummary(null); setCols(null); setBusy(true);
     try {
-      const p = await preview(f);
+      const p = await preview(f, headerlessOverride);
       setCols(p);
-      // Pre-fill best guesses so the common case is one click.
-      setDateColumn(guess(p.headers, ['date', 'posted', 'when']));
-      setMerchantColumn(guess(p.headers, ['desc', 'merchant', 'detail', 'payee', 'name']));
-      setAmountColumn(guess(p.headers, ['amount', 'value']));
-      setDebitColumn(guess(p.headers, ['debit', 'withdrawal']));
-      setCreditColumn(guess(p.headers, ['credit', 'deposit']));
-      setAccountColumn(guess(p.headers, ['account', 'acct']));
+      setHeaderless(p.headerless);
+      if (p.headerless) {
+        guessPositional(p.headers);
+      } else {
+        // Pre-fill best guesses so the common case is one click.
+        setDateColumn(guess(p.headers, ['date', 'posted', 'when']));
+        setMerchantColumn(guess(p.headers, ['desc', 'merchant', 'detail', 'payee', 'name']));
+        setAmountColumn(guess(p.headers, ['amount', 'value']));
+        setDebitColumn(guess(p.headers, ['debit', 'withdrawal', 'spent']));
+        setCreditColumn(guess(p.headers, ['credit', 'deposit', 'incoming']));
+        setAccountColumn(guess(p.headers, ['account', 'acct']));
+        setRunningTotalColumn(guess(p.headers, ['running', 'balance']));
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -169,7 +293,9 @@ function MappingWizardCard() {
   async function run() {
     if (!file) return;
     const mapping: CsvMapping = {
-      dateColumn, merchantColumn, dayFirst,
+      dateColumn, dayFirst, headerless,
+      merchantColumn: merchantColumn || undefined,
+      runningTotalColumn: runningTotalColumn || undefined,
       ...(amountMode === 'single'
         ? { amountColumn, amountInvert }
         : { debitColumn: debitColumn || undefined, creditColumn: creditColumn || undefined }),
@@ -196,8 +322,10 @@ function MappingWizardCard() {
     <Card>
       <h1 className="text-xl font-semibold text-ink mb-2">Import any CSV (column-mapping wizard)</h1>
       <p className="text-sm text-ink-dim mb-3">
-        For bank exports the auto-detector doesn't recognise. Pick a file, then map its columns to
-        date / merchant / amount / account. Re-importing the same rows is safe — duplicates are skipped.
+        For bank exports the auto-detector doesn&rsquo;t recognise, including files with{' '}
+        <strong>no header row</strong> — those are read positionally as <code>col1…colN</code>.
+        Pick a file, then map its columns to date / amount / account. A description column is
+        optional. Re-importing the same rows is safe — duplicates are skipped.
       </p>
       <div className="flex gap-2 items-center mb-3">
         <input
@@ -239,8 +367,8 @@ function MappingWizardCard() {
               <select value={dateColumn} onChange={(e) => setDateColumn(e.target.value)} className={selectClass}>{headerOptions('Choose…')}</select>
             </label>
             <label className="flex flex-col gap-1 text-xs text-ink-dim">
-              Merchant column
-              <select value={merchantColumn} onChange={(e) => setMerchantColumn(e.target.value)} className={selectClass}>{headerOptions('Choose…')}</select>
+              Merchant column <span className="text-ink-dim">(optional)</span>
+              <select value={merchantColumn} onChange={(e) => setMerchantColumn(e.target.value)} className={selectClass}>{headerOptions('No description column')}</select>
             </label>
 
             <div className="flex flex-col gap-1 text-xs text-ink-dim">
@@ -274,19 +402,36 @@ function MappingWizardCard() {
                   {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               ) : (
-                <select value={accountColumn} onChange={(e) => setAccountColumn(e.target.value)} className={selectClass}>{headerOptions('Account-id column')}</select>
+                <select value={accountColumn} onChange={(e) => setAccountColumn(e.target.value)} className={selectClass}>{headerOptions('Account id or name column')}</select>
               )}
             </div>
+
+            <label className="flex flex-col gap-1 text-xs text-ink-dim">
+              Running-total column <span className="text-ink-dim">(optional)</span>
+              <select value={runningTotalColumn} onChange={(e) => setRunningTotalColumn(e.target.value)} className={selectClass}>{headerOptions('None')}</select>
+              <span className="text-ink-dim">
+                The statement&rsquo;s balance after each transaction. Map it and the opening balance
+                is worked out for you.
+              </span>
+            </label>
           </div>
 
-          <div className="flex items-center gap-3 mt-4">
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
             <label className="flex items-center gap-1.5 text-xs text-ink-muted">
               <input type="checkbox" checked={dayFirst} onChange={(e) => setDayFirst(e.target.checked)} /> Dates are day-first (DD/MM/YYYY)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+              <input
+                type="checkbox"
+                checked={headerless}
+                // Re-reads the file, because which row is data depends on this.
+                onChange={(e) => file && void loadPreview(file, e.target.checked)}
+              /> No header row
             </label>
             <Button
               className="ml-auto"
               onClick={run}
-              disabled={busy || !dateColumn || !merchantColumn ||
+              disabled={busy || !dateColumn ||
                 (amountMode === 'single' ? !amountColumn : !debitColumn && !creditColumn) ||
                 (accountMode === 'fixed' ? !accountId : !accountColumn)}
             >
@@ -303,6 +448,8 @@ function MappingWizardCard() {
           <p className="text-xs text-ink-dim mt-1">
             Categorized — history {summary.categorized.history} · rules {summary.categorized.rules} · unclassified {summary.categorized.unclassified}
           </p>
+          <BalanceNotes summary={summary} />
+          <UnknownAccountsCallout summary={summary} onRetry={run} />
           {summary.errors.length > 0 && (
             <ul className="mt-2 text-down list-disc pl-5">
               {summary.errors.map((er, idx) => <li key={idx}>Row {er.row}: {er.reason}</li>)}
