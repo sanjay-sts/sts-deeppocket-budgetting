@@ -61,7 +61,7 @@ export interface PersonInput {
 }
 export interface AccountInput {
   personIds: string[]; institution: string; accountType: string;
-  kind?: string; name?: string; isLiability?: boolean; beneficiaryIds?: string[];
+  kind?: string; name?: string; beneficiaryIds?: string[];
   /**
    * Balance before the first recorded transaction. Cash on hand for chequing/savings/cash,
    * amount OWED (positive) for a credit card — the same convention `meta.openingBalances`
