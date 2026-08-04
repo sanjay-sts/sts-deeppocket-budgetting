@@ -48,7 +48,10 @@ const dateFormat = new Intl.DateTimeFormat('en-CA', {
 });
 
 export function formatDate(iso: string): string {
-  return dateFormat.format(new Date(iso + 'T00:00:00'));
+  // format(Invalid Date) throws a RangeError, so one corrupt date in the data would blank
+  // the whole page. Degrade to the raw string instead — visible and greppable, not fatal.
+  const d = new Date(iso + 'T00:00:00');
+  return Number.isNaN(d.getTime()) ? iso : dateFormat.format(d);
 }
 
 export function monthKey(iso: string): string {
