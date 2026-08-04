@@ -39,7 +39,12 @@ the flag. Deleting an account cascades its transactions.
 The transactions importer resolves its `account` column by **id, custom name, or computed
 display name** (case-insensitively; ambiguity is an error, never a guess), and reports
 unmatched labels in `summary.unknownAccounts` so the Import page can offer to create them and
-re-run — a real export naming a card in prose imports without being hand-edited. The
+re-run — a real export naming a card in prose imports without being hand-edited. Slash
+dates are **order-sniffed per file**: one date with a first component >12 proves DD/MM/YYYY
+(real TD chequing exports) and one with a second component >12 proves MM/DD/YYYY; evidence
+both ways is a file-level error, no evidence keeps the MM/DD default. Every parsed date is
+calendar-validated (`app/constants.py normalize_date`), so an impossible date is a row
+error, never a silently stored `2026-25-04` that scrambles reconciliation. The
 column-mapping wizard reads **headerless** CSVs positionally as `col1…colN` (guessed from the
 first row, overridable), treats a description column as optional, and can map the
 **running-total** column. Doing so makes each account's opening balance *derived* rather than

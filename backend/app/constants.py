@@ -1,3 +1,4 @@
+import datetime
 import math
 import re
 import uuid
@@ -135,13 +136,33 @@ def csv_cell(value) -> str:
     return (value or "").strip()
 
 
-def normalize_date(s: str) -> str:
-    """Accept 'YYYYMMDD', 'YYYY-MM-DD', or 'MM/DD/YYYY' (bank exports); return ISO."""
+def normalize_date(s: str, day_first: bool = False) -> str:
+    """Accept 'YYYYMMDD', 'YYYY-MM-DD', or a slash date; return ISO.
+
+    Slash dates read as MM/DD/YYYY unless `day_first` says the file is DD/MM/YYYY (real TD
+    chequing exports are). Every result is calendar-checked: without that, a DD/MM date fed
+    to the MM/DD reading becomes a legal-looking string like '2026-25-04' that silently
+    corrupts every per-date derivation downstream (opening balances, reconciliation).
+    """
     s = s.strip()
+    slash = False
     if re.fullmatch(r"\d{8}", s):
-        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-        return s
-    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", s):
-        return f"{s[6:10]}-{s[0:2]}-{s[3:5]}"
-    raise ValueError(f"Unrecognized date format: {s!r} (expected YYYYMMDD, YYYY-MM-DD, or MM/DD/YYYY)")
+        y, m, d = s[0:4], s[4:6], s[6:8]
+    elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        y, m, d = s[0:4], s[5:7], s[8:10]
+    elif re.fullmatch(r"\d{2}/\d{2}/\d{4}", s):
+        slash = True
+        y = s[6:10]
+        d, m = (s[0:2], s[3:5]) if day_first else (s[3:5], s[0:2])
+    else:
+        raise ValueError(
+            f"Unrecognized date format: {s!r} (expected YYYYMMDD, YYYY-MM-DD, or a slash date)")
+    try:
+        datetime.date(int(y), int(m), int(d))
+    except ValueError:
+        hint = (
+            f" read as {'DD/MM/YYYY' if day_first else 'MM/DD/YYYY'} — check the day-first setting"
+            if slash else ""
+        )
+        raise ValueError(f"Impossible date: {s!r}{hint}") from None
+    return f"{y}-{m}-{d}"

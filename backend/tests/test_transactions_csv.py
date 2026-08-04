@@ -96,6 +96,59 @@ def test_unrecognized_headers(session):
     assert summary["errors"][0]["row"] == 0
 
 
+# Real TD chequing exports are DD/MM/YYYY. The 13th proves the order for the whole file,
+# so the ambiguous 06/04 row must land on April 6, not June 4.
+DAY_FIRST_CSV = """Date,Transaction_detail,withdrawal,deposit,running_total,account
+06/04/2026,GROCER,25.00,,975.00,sav
+13/04/2026,LANDLORD,100.00,,875.00,sav
+"""
+
+
+def test_bank_import_sniffs_day_first_from_whole_file(session):
+    _setup(session)
+    summary = import_transactions_csv(DAY_FIRST_CSV, session)
+    assert summary["created"] == 2 and summary["errors"] == []
+    txs = {t.raw_merchant: t for t in session.exec(select(Transaction)).all()}
+    assert txs["LANDLORD"].date == "2026-04-13"
+    assert txs["GROCER"].date == "2026-04-06"
+
+
+def test_bank_import_day_first_file_reconciles(session):
+    # The real-world symptom: a DD/MM statement parsed as MM/DD scrambles per-date sums
+    # and reports massive drift. Parsed correctly, this file reconciles exactly.
+    _setup(session)
+    csv_text = """Date,Transaction_detail,withdrawal,deposit,running_total,account
+28/03/2026,OPENER,50.00,,950.00,sav
+06/04/2026,GROCER,25.00,,925.00,sav
+13/04/2026,LANDLORD,100.00,,825.00,sav
+"""
+    summary = import_transactions_csv(csv_text, session)
+    assert summary["reconciliation"] == []
+    assert summary["openingBalances"][0]["openingBalance"] == 1000.00
+
+
+def test_bank_import_all_ambiguous_dates_stay_month_first(session):
+    _setup(session)
+    csv_text = """Date,Transaction_detail,withdrawal,deposit,running_total,account
+03/04/2026,SHOP,10.00,,90.00,sav
+"""
+    import_transactions_csv(csv_text, session)
+    tx = session.exec(select(Transaction)).one()
+    assert tx.date == "2026-03-04"
+
+
+def test_bank_import_conflicting_date_orders_is_a_file_error(session):
+    _setup(session)
+    csv_text = """Date,Transaction_detail,withdrawal,deposit,running_total,account
+13/04/2026,SHOP,10.00,,90.00,sav
+04/13/2026,SHOP,10.00,,80.00,sav
+"""
+    summary = import_transactions_csv(csv_text, session)
+    assert summary["created"] == 0
+    assert summary["errors"][0]["row"] == 0
+    assert "date" in summary["errors"][0]["reason"].lower()
+
+
 def test_bad_running_total_is_a_row_error_not_a_500(session):
     _setup(session)
     bad = """Date,merchant,amount,payment,running_total,account
