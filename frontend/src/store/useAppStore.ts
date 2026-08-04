@@ -21,14 +21,14 @@ interface AppState {
   editRule: (id: string, b: { keyword?: string; categoryId?: string }) => Promise<void>;
   removeRule: (id: string) => Promise<void>;
   importTransactionsFile: (file: File) => Promise<import('../data/api').TxImportSummary>;
-  previewTransactionsCsv: (file: File) => Promise<import('../data/api').CsvPreview>;
+  previewTransactionsCsv: (file: File, headerless?: boolean) => Promise<import('../data/api').CsvPreview>;
   importTransactionsMapped: (file: File, mapping: import('../data/api').CsvMapping) => Promise<import('../data/api').TxImportSummary>;
   refetch: () => Promise<void>;
   addPerson: (b: import('../data/api').PersonInput) => Promise<void>;
   editPerson: (id: string, b: Partial<import('../data/api').PersonInput>) => Promise<void>;
   removePerson: (id: string, cascade?: boolean) => Promise<void>;
-  addAccount: (b: { personIds: string[]; institution: string; accountType: string; kind?: string; name?: string; beneficiaryIds?: string[] }) => Promise<void>;
-  editAccount: (id: string, b: Record<string, unknown>) => Promise<void>;
+  addAccount: (b: import('../data/api').AccountInput) => Promise<void>;
+  editAccount: (id: string, b: Partial<import('../data/api').AccountInput>) => Promise<void>;
   removeAccount: (id: string, cascade?: boolean) => Promise<void>;
   saveSnapshot: (b: { accountId: string; date: string; amount: number }) => Promise<void>;
   editSnapshot: (id: string, b: { date?: string; amount?: number }) => Promise<void>;
@@ -125,7 +125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refetch();
     return summary;
   },
-  previewTransactionsCsv: (file) => api.previewTransactionsCsv(file),
+  previewTransactionsCsv: (file, headerless) => api.previewTransactionsCsv(file, headerless),
   importTransactionsMapped: async (file, mapping) => {
     const summary = await api.importTransactionsCsvMapped(file, mapping);
     await get().refetch();

@@ -6,12 +6,19 @@ delete in one action. The caller is responsible for committing the session.
 """
 from sqlmodel import Session, select
 
-from ..models import Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution, RecurringContribution
+from ..models import (
+    Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
+    RecurringContribution, Transaction,
+)
 
 
 def cascade_delete_account(session: Session, account_id: str) -> None:
     # Delete child rows first, then the account itself. Caller commits.
     for row in session.exec(select(Contribution).where(Contribution.account_id == account_id)).all():
+        session.delete(row)
+    # Transactions too: they carry an account_id FK, so leaving them behind stranded every
+    # imported row of a deleted chequing account or credit card in the payload.
+    for row in session.exec(select(Transaction).where(Transaction.account_id == account_id)).all():
         session.delete(row)
     for row in session.exec(
             select(RecurringContribution).where(RecurringContribution.account_id == account_id)).all():

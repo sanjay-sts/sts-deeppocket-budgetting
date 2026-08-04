@@ -59,9 +59,15 @@ export interface PersonInput {
   /** Omit to leave unset on create; send null on update to clear a recorded income. */
   grossIncome?: number | null;
 }
-interface AccountInput {
+export interface AccountInput {
   personIds: string[]; institution: string; accountType: string;
-  kind?: string; name?: string; isLiability?: boolean; beneficiaryIds?: string[];
+  kind?: string; name?: string; beneficiaryIds?: string[];
+  /**
+   * Balance before the first recorded transaction. Cash on hand for chequing/savings/cash,
+   * amount OWED (positive) for a credit card — the same convention `meta.openingBalances`
+   * uses. Importing a statement that carries a running total overwrites it.
+   */
+  openingBalance?: number;
 }
 
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -174,10 +180,28 @@ export const updateRule = (id: string, b: { keyword?: string; categoryId?: strin
   send<RuleRow>('PUT', `/api/rules/${id}`, b);
 export const deleteRule = (id: string) => send<void>('DELETE', `/api/rules/${id}`);
 
+/** One account whose stored opening balance was derived from a statement's running total. */
+export interface OpeningBalanceChange {
+  accountId: string;
+  openingBalance: number;
+  previousOpeningBalance: number;
+  /** Largest gap between what a statement date reports and the transactions on record. */
+  drift: number;
+  /** How many statement dates can't be squared with those transactions. 0 = reconciled. */
+  unreconciledDates: number;
+}
+
 export interface TxImportSummary {
   created: number; duplicates: number; skipped: number;
   errors: { row: number; reason: string }[];
   categorized: { history: number; rules: number; unclassified: number };
+  /** Which shape the file was read as — drives the kind preselected when creating an account. */
+  format: 'bank' | 'credit_card' | 'mapped' | 'unrecognized';
+  /** Account-column labels that matched nothing, deduped, so the UI can offer to create them. */
+  unknownAccounts: string[];
+  openingBalances: OpeningBalanceChange[];
+  /** Accounts whose running totals don't add up — a gap or duplicate in the imported history. */
+  reconciliation: OpeningBalanceChange[];
 }
 
 export async function importTransactionsCsv(file: File): Promise<TxImportSummary> {
@@ -192,10 +216,13 @@ export interface CsvPreview {
   headers: string[];
   sampleRows: Record<string, string>[];
   rowCount: number;
+  /** True when the file has no header row, so `headers` is the positional col1..colN. */
+  headerless: boolean;
 }
 export interface CsvMapping {
   dateColumn: string;
-  merchantColumn: string;
+  /** Optional: some exports are just date/debit/credit/balance with no description column. */
+  merchantColumn?: string;
   amountColumn?: string;
   amountInvert?: boolean;
   debitColumn?: string;
@@ -203,11 +230,17 @@ export interface CsvMapping {
   accountColumn?: string;
   accountId?: string;
   dayFirst?: boolean;
+  /** The statement's balance-after-each-transaction column. */
+  runningTotalColumn?: string;
+  /** Must match how the preview read the file, or the columns won't line up. */
+  headerless?: boolean;
 }
 
-export async function previewTransactionsCsv(file: File): Promise<CsvPreview> {
+/** `headerless` overrides the server's guess about whether the file has a header row. */
+export async function previewTransactionsCsv(file: File, headerless?: boolean): Promise<CsvPreview> {
   const fd = new FormData();
   fd.append('file', file);
+  if (headerless !== undefined) fd.append('headerless', String(headerless));
   return json<CsvPreview>(
     await fetch(`${BASE}/api/import/transactions-csv/preview`, { method: 'POST', body: fd }),
   );

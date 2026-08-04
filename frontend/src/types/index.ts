@@ -164,6 +164,12 @@ export interface FixturesMeta {
   generatedAt: IsoDate;
   seed: number;
   monthsCovered: number;
+  /**
+   * Balance before each account's first recorded transaction, keyed by account id.
+   * Meaning follows the kind: cash on hand for chequing/savings/cash, amount OWED
+   * (positive) for a credit card — the inversion `latestCreditCardOwing` applies for
+   * display. Derived from a statement's running-total column when one was imported.
+   */
   openingBalances: Record<AccountId, number>;
 }
 

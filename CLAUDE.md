@@ -31,9 +31,24 @@ bootstraps `DEFAULT_CATEGORIES` (`app/constants.py`) so it is never category-les
 only against a completely empty categories table, so a deleted category never returns. Every
 import endpoint rejects non-CSV uploads with an actionable 400 instead of a 500
 (`app/services/uploads.py`), while still accepting cp1252 and UTF-16 exports.
+**Cash and credit-card accounts** are CRUD-editable on the Accounts page (per-group "Add
+credit card" / "Add cash account", shared `components/shared/AccountForm.tsx`); investment
+accounts stay in the Settings editor, which owns the RESP-beneficiary handling. A card's
+kind is enough to make it a liability — the backend derives `is_liability`, it does not trust
+the flag. Deleting an account cascades its transactions.
+The transactions importer resolves its `account` column by **id, custom name, or computed
+display name** (case-insensitively; ambiguity is an error, never a guess), and reports
+unmatched labels in `summary.unknownAccounts` so the Import page can offer to create them and
+re-run — a real export naming a card in prose imports without being hand-edited. The
+column-mapping wizard reads **headerless** CSVs positionally as `col1…colN` (guessed from the
+first row, overridable), treats a description column as optional, and can map the
+**running-total** column. Doing so makes each account's opening balance *derived* rather than
+typed, and any statement date that can't be squared with the transactions on record is
+reported as reconciliation drift (`app/services/opening_balance.py`).
 Failed optimistic writes toast and revert (global `ToastHost`). Specs:
 `docs/superpowers/specs/2026-07-16-m3-editable-transactions-design.md`,
-`docs/superpowers/specs/2026-07-17-m4-editable-categories-budgets-design.md`.
+`docs/superpowers/specs/2026-07-17-m4-editable-categories-budgets-design.md`,
+`docs/superpowers/specs/2026-08-02-credit-card-accounts-and-headerless-import-design.md`.
 
 ## Layout
 
@@ -116,6 +131,15 @@ mock/generate.py → mock/out/fixtures.json → seed.py → SQLite
 - **TypeScript strict.** No `any` escape hatches; add types to `src/types/index.ts`.
 - **Path alias:** `@` → `frontend/src` (configured in `vite.config.ts` + `tsconfig.json`).
 - **Money/dates:** format only via `lib/format.ts`. Dates are ISO `YYYY-MM-DD` strings.
+- **`meta.openingBalances` means different things per kind** — cash on hand for
+  chequing/savings/cash, amount **owed** (positive) for a credit card. That mirrors the
+  inversion `latestCreditCardOwing` applies for display, and it is what lets a card balance be
+  right when only part of its history is imported. A statement's running-total column is the
+  authority: importing one recomputes the value and overrides anything hand-entered.
+- **Transactions have a date but no intra-day sequence.** Statements routinely put a dozen rows
+  on one date, so never derive anything by walking same-date rows in order — sorting by
+  `(date, id)` picks an arbitrary one, since ids are random. Aggregate per date instead
+  (`app/services/opening_balance.py` explains the consequences in full).
 - **Canadian logic** (contribution room, CESG) lives in `lib/canadian.ts`; the 2025 CRA limits
   are in `CRA_LIMITS_2025` there. CESG is 20% of RESP contributions, capped $500/yr/child and
   $7,200 lifetime — and in M2 it is **derived**, never hand-entered.
@@ -129,6 +153,13 @@ mock/generate.py → mock/out/fixtures.json → seed.py → SQLite
 - `grossIncome` is a single current-year figure used as the prior-year earned-income proxy for
   RRSP room; there is no per-year income history. A CRA-stated room entry overrides it.
   ([#2](https://github.com/sanjay-sts/sts-deeppocket-budgetting/issues/2))
+- **Import dedup drops two genuinely identical transactions on the same day.** The key is
+  `(account, date, raw_merchant, amount)`, so a repeated charge — two identical vending
+  purchases, a fee billed twice — is treated as a re-import and skipped. Idempotent re-import
+  depends on that key, so tightening it is a real design decision, not a patch. Where a
+  running-total column exists the loss is at least *visible*: it shows up as reconciliation
+  drift on the Import page. The narrow exception already made is rows with no description at
+  all, which add the running total to the key (`services/transactions_csv.py`).
 
 **Older `(issue #N)` annotations in comments, specs, and plans do not resolve.** The repository
 history was rewritten on 2026-07-26 to purge personal data, which meant deleting and recreating

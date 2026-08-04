@@ -21,6 +21,16 @@ KIND_MAP = {
     "nonregistered": "non_registered",
     "margin": "non_registered",
     "cash": "non_registered",
+    # Banking kinds. Without these, normalize_kind("credit_card") fell through to
+    # non_registered, which drops the account out of BANK_KINDS — and so out of
+    # meta.openingBalances and every cash/credit KPI. Note "cash" above deliberately
+    # stays mapped to non_registered: for the investment importer, account_type "cash"
+    # means a cash/margin investment account, not a cash wallet.
+    "chequing": "chequing",
+    "checking": "chequing",
+    "savings": "savings",
+    "credit_card": "credit_card",
+    "creditcard": "credit_card",
 }
 
 CONTRIBUTION_KINDS = {"tfsa", "rrsp", "resp", "fhsa"}

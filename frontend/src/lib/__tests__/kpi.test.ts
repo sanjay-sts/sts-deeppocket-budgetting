@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { accountReturns, netWorth, netWorthByKind, latestInvestmentSnapshot, round2 } from '../kpi';
+import {
+  accountReturns, latestCashBalances, latestCreditCardOwing, netWorth, netWorthByKind,
+  netWorthTrend, latestInvestmentSnapshot, round2,
+} from '../kpi';
 import type { Account, Fixtures, InvestmentSnapshot, Transaction } from '../../types';
 
 const LIMITS = {
@@ -42,6 +45,40 @@ function fxBreakdown(): Fixtures {
   ]);
   return { ...f, accounts, transactions, meta: { ...f.meta, openingBalances: { chq: 500 } } };
 }
+
+// A card's opening balance is the amount OWED before the first imported row (positive),
+// which is what the import derives from a statement's running-total column. Without it,
+// importing part of a card's history under-reports the debt.
+describe('credit-card opening balances', () => {
+  function withCardOpening(opening: number): Fixtures {
+    const f = fxBreakdown();
+    return { ...f, meta: { ...f.meta, openingBalances: { ...f.meta.openingBalances, cc1: opening } } };
+  }
+
+  it('adds the opening owed to the amount the imported rows spent', () => {
+    const owing = latestCreditCardOwing(withCardOpening(1000)).find((b) => b.accountId === 'cc1');
+    expect(owing!.balance).toBe(1250); // 1000 already owed + 250 of purchases
+  });
+
+  it('reports only the transactions when no opening balance is recorded', () => {
+    const owing = latestCreditCardOwing(fxBreakdown()).find((b) => b.accountId === 'cc1');
+    expect(owing!.balance).toBe(250);
+  });
+
+  it('counts toward net worth as debt, not as an asset', () => {
+    expect(netWorth(withCardOpening(1000)).total).toBe(netWorth(fxBreakdown()).total - 1000);
+  });
+
+  it('shows up in the trend as a liability', () => {
+    const point = netWorthTrend(withCardOpening(1000))[0]!;
+    expect(point.liabilities).toBe(1250);
+  });
+
+  it('leaves cash balances alone — those openings are a balance, not a debt', () => {
+    const chq = latestCashBalances(withCardOpening(1000)).find((b) => b.accountId === 'chq');
+    expect(chq!.balance).toBe(1500); // 500 opening + 1000 salary
+  });
+});
 
 describe('netWorthByKind', () => {
   it('includes a non_registered row with its own label (issue #8)', () => {
