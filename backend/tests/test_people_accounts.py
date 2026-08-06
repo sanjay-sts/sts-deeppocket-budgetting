@@ -53,6 +53,49 @@ def test_create_account_natural_key_conflict(client):
     assert client.post("/api/accounts", json=payload).status_code == 409
 
 
+def test_second_account_same_institution_allowed_with_distinct_name(client):
+    # A household really can hold two savings accounts at the same bank; a custom name
+    # keeps them distinguishable, so the natural-key conflict must not fire.
+    pid = client.post("/api/people", json={"name": "Sanjay", "role": "adult"}).json()["id"]
+    payload = {"personIds": [pid], "institution": "TD Canada Trust", "accountType": "savings"}
+    assert client.post("/api/accounts", json=payload).status_code == 201
+    r = client.post("/api/accounts", json={**payload, "name": "Sanjay TD Investment Savings"})
+    assert r.status_code == 201
+    assert r.json()["name"] == "Sanjay TD Investment Savings"
+
+
+def test_second_account_with_same_custom_name_still_conflicts(client):
+    # Identical custom names re-create the ambiguity the conflict exists to prevent
+    # (case-insensitively — the CSV importer matches names lowercased).
+    pid = client.post("/api/people", json={"name": "Sanjay", "role": "adult"}).json()["id"]
+    payload = {"personIds": [pid], "institution": "TD Canada Trust", "accountType": "savings",
+               "name": "Emergency Fund"}
+    assert client.post("/api/accounts", json=payload).status_code == 201
+    assert client.post("/api/accounts", json={**payload, "name": "emergency fund"}).status_code == 409
+
+
+def test_custom_name_shadowing_computed_display_conflicts(client):
+    # Naming the new account exactly what the unnamed one displays as would still make
+    # the pair indistinguishable, so it conflicts too.
+    pid = client.post("/api/people", json={"name": "Jordan", "role": "adult"}).json()["id"]
+    payload = {"personIds": [pid], "institution": "TD", "accountType": "savings"}
+    assert client.post("/api/accounts", json=payload).status_code == 201
+    r = client.post("/api/accounts", json={**payload, "name": "Jordan TD savings"})
+    assert r.status_code == 409
+
+
+def test_update_clearing_name_into_collision_conflicts(client):
+    # Two same-natural-key accounts are only legal while their names keep them apart;
+    # clearing the custom name would collapse both onto the same computed display.
+    pid = client.post("/api/people", json={"name": "Sanjay", "role": "adult"}).json()["id"]
+    payload = {"personIds": [pid], "institution": "TD Canada Trust", "accountType": "savings"}
+    assert client.post("/api/accounts", json=payload).status_code == 201
+    named = client.post("/api/accounts", json={**payload, "name": "Investment Savings"})
+    assert named.status_code == 201
+    r = client.put(f"/api/accounts/{named.json()['id']}", json={"name": ""})
+    assert r.status_code == 409
+
+
 def test_create_account_requires_at_least_one_owner(client):
     r = client.post("/api/accounts", json={
         "personIds": [], "institution": "Mapletrade", "accountType": "tfsa"})
