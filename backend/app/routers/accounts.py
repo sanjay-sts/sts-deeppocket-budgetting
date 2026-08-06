@@ -45,10 +45,37 @@ def _resolve_liability(kind: str, requested: bool | None) -> bool:
     return bool(requested)
 
 
-def _natural_key_exists(
+def _display_key(
+    session: Session, owner_ids: set[str], institution: str, account_type: str,
+    custom_name: str | None,
+) -> str:
+    """Lowercased display name: custom override, else the computed owners+institution+type
+    (same shape as services/fixtures._account_out and the importer's account index)."""
+    if custom_name and custom_name.strip():
+        return custom_name.strip().lower()
+    owner_names = sorted(
+        (p.name if (p := session.get(Person, pid)) else pid) for pid in owner_ids
+    )
+    return " ".join(
+        x for x in [", ".join(owner_names), institution, account_type] if x
+    ).strip().lower()
+
+
+def _indistinguishable_account_exists(
     session: Session, institution: str, account_type: str,
-    owner_ids: set[str], beneficiary_ids: set[str], exclude_id: str = None,
+    owner_ids: set[str], beneficiary_ids: set[str], custom_name: str | None,
+    exclude_id: str = None,
 ) -> bool:
+    """True when an existing account would render the SAME display name as the proposed one.
+
+    Sharing institution/type/owner set/beneficiary set alone is fine — a household really
+    can hold two savings accounts at one bank — as long as a custom name keeps the pair
+    apart. What must never exist is two accounts with identical display names: unreadable
+    on every screen, and a permanently ambiguous label for the CSV importer's account
+    column (services/transactions_csv._account_index matches names lowercased, hence the
+    case-insensitive compare here).
+    """
+    new_key = _display_key(session, owner_ids, institution, account_type, custom_name)
     candidates = session.exec(select(Account).where(
         Account.institution == institution,
         Account.account_type == account_type,
@@ -56,11 +83,14 @@ def _natural_key_exists(
     for row in candidates:
         if row.id == exclude_id:
             continue
-        if set(_account_owner_ids(session, row.id)) != owner_ids:
+        row_owner_ids = set(_account_owner_ids(session, row.id))
+        if row_owner_ids != owner_ids:
             continue
         if set(_account_beneficiary_ids(session, row.id)) != beneficiary_ids:
             continue
-        return True
+        if _display_key(session, row_owner_ids, row.institution, row.account_type,
+                        row.custom_name) == new_key:
+            return True
     return False
 
 
@@ -75,14 +105,17 @@ def create_account(body: AccountCreate, session: Session = Depends(get_session))
         raise HTTPException(422, "At least one owner is required.")
     owner_ids = set(body.personIds)
     beneficiary_ids = set(body.beneficiaryIds or [])
-    if _natural_key_exists(session, body.institution, body.accountType, owner_ids, beneficiary_ids):
+    custom_name = (body.name or "").strip() or None
+    if _indistinguishable_account_exists(
+            session, body.institution, body.accountType, owner_ids, beneficiary_ids, custom_name):
         raise HTTPException(
-            409, "An account with this institution, type, owner set, and beneficiary set already exists.")
+            409, "An account with this institution, type, owner set, and beneficiary set "
+                 "already exists with the same name. Give this one a different name to tell them apart.")
     kind = body.kind or normalize_kind(body.accountType)
     a = Account(
         id=new_id("acc"), institution=body.institution,
         account_type=body.accountType, kind=kind,
-        custom_name=(body.name or "").strip() or None,
+        custom_name=custom_name,
         is_liability=_resolve_liability(kind, body.isLiability),
         opening_balance=body.openingBalance or 0.0,
     )
@@ -141,9 +174,12 @@ def update_account(account_id: str, body: AccountUpdate, session: Session = Depe
         set(body.beneficiaryIds) if body.beneficiaryIds is not None
         else set(_account_beneficiary_ids(session, account_id))
     )
-    if _natural_key_exists(session, a.institution, a.account_type, owner_ids, beneficiary_ids, exclude_id=a.id):
+    if _indistinguishable_account_exists(
+            session, a.institution, a.account_type, owner_ids, beneficiary_ids,
+            a.custom_name, exclude_id=a.id):
         raise HTTPException(
-            409, "An account with this institution, type, owner set, and beneficiary set already exists.")
+            409, "An account with this institution, type, owner set, and beneficiary set "
+                 "already exists with the same name. Give this one a different name to tell them apart.")
 
     session.add(a)
     session.commit()
