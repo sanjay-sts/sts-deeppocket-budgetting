@@ -17,6 +17,33 @@ CC_HEADERS = {"date", "merchant", "amount", "payment", "account"}
 # date/debit/credit/balance). Dedup compensates — see _persist_row.
 NO_DESCRIPTION = "(no description)"
 
+_SLASH_DATE_RE = re.compile(r"(\d{2})/(\d{2})/\d{4}")
+
+
+def sniff_day_first(dates) -> bool:
+    """Decide the slash-date order for a whole file: DD/MM/YYYY or MM/DD/YYYY.
+
+    A bank is consistent within one export, so a single unambiguous date — a first
+    component over 12 (real TD chequing exports) or a second component over 12 — settles
+    the order for every ambiguous row in the file. A full statement almost always contains
+    one. Evidence both ways means the file can't be parsed at all; no evidence keeps the
+    documented MM/DD default, where any mistake still surfaces as reconciliation drift.
+    """
+    day_first = month_first = False
+    for s in dates:
+        m = _SLASH_DATE_RE.fullmatch(s.strip())
+        if not m:
+            continue
+        if int(m[1]) > 12:
+            day_first = True
+        if int(m[2]) > 12:
+            month_first = True
+    if day_first and month_first:
+        raise ValueError(
+            "Conflicting date orders in this file: some dates only work as DD/MM/YYYY "
+            "and others only as MM/DD/YYYY.")
+    return day_first
+
 
 def _clean_merchant(raw: str) -> str:
     # Same cleanup the mock generator applies (mock/generate.py resolve_alias).
@@ -173,15 +200,21 @@ def import_transactions_csv(text: str, session: Session) -> dict:
         })
         return summary
 
+    rows = [{(k or "").strip().lower(): csv_cell(v) for k, v in raw.items()} for raw in reader]
+    try:
+        day_first = sniff_day_first(r.get("date", "") for r in rows)
+    except ValueError as e:
+        summary["errors"].append({"row": 0, "reason": str(e)})
+        return summary
+
     transfer_categories = _transfer_category_ids(session)
     accounts = _account_index(session)
     touched: set[str] = set()
 
-    for i, raw in enumerate(reader, start=1):
-        row = {(k or "").strip().lower(): csv_cell(v) for k, v in raw.items()}
+    for i, row in enumerate(rows, start=1):
         label = row.get("account", "")
         try:
-            date = normalize_date(row["date"])
+            date = normalize_date(row["date"], day_first=day_first)
             amount = _parse_amount(row, neg_col, pos_col)
             raw_merchant = row[merchant_col]
             if not raw_merchant:
@@ -310,14 +343,6 @@ def _validate_mapping(mapping, header_set: set[str]) -> str | None:
     return None
 
 
-def _parse_mapped_date(s: str, day_first: bool) -> str:
-    s = s.strip()
-    if day_first:
-        if re.fullmatch(r"\d{2}/\d{2}/\d{4}", s):  # DD/MM/YYYY
-            return f"{s[6:10]}-{s[3:5]}-{s[0:2]}"
-    return normalize_date(s)  # handles YYYYMMDD, YYYY-MM-DD, MM/DD/YYYY
-
-
 def _mapped_rows(text: str, headerless: bool) -> tuple[set[str], list[dict]]:
     """Yield (header set, row dicts) for either a headed or a headerless file."""
     rows = [r for r in csv.reader(io.StringIO(text)) if any((c or "").strip() for c in r)]
@@ -354,7 +379,7 @@ def import_transactions_csv_mapped(text: str, mapping, session: Session) -> dict
     for i, row in enumerate(rows, start=1):
         label = mapping.accountId or row.get(mapping.accountColumn, "")
         try:
-            date = _parse_mapped_date(row.get(mapping.dateColumn, ""), mapping.dayFirst)
+            date = normalize_date(row.get(mapping.dateColumn, ""), day_first=mapping.dayFirst)
             raw_merchant = row.get(mapping.merchantColumn, "") if mapping.merchantColumn else ""
             if not raw_merchant:
                 if mapping.merchantColumn:

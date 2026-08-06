@@ -171,7 +171,7 @@ def test_stray_nul_does_not_reject_an_otherwise_good_csv(client):
     """One padding NUL must not cost the user all their rows — csv.reader itself refuses
     NULs, so they have to be stripped rather than tolerated."""
     text = ("date,person,institution,account_type,amount\n"
-            + "".join(f"2026013{i%10},Avery,northline,tfsa,{1000+i}\n" for i in range(50)))
+            + "".join(f"202601{10 + i%10},Avery,northline,tfsa,{1000+i}\n" for i in range(50)))
     raw = text.encode("utf-8").replace(b"northline", b"north\x00line", 1)
     r = client.post("/api/import/investments-csv", files={"file": ("pad.csv", raw, "text/csv")})
     assert r.status_code == 200, _detail(r)

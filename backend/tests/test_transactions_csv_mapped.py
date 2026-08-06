@@ -77,6 +77,15 @@ def test_mapped_day_first_date(session):
     assert txs["SHOP"].date == "2026-05-03"
 
 
+def test_mapped_day_first_impossible_day_is_a_row_error(session):
+    _setup(session)
+    csv_text = "when,who,value,acct\n31/02/2026,SHOP,-9.00,chq\n"  # Feb 31 doesn't exist
+    m = TransactionCsvMapping(dateColumn="when", merchantColumn="who", amountColumn="value", accountId="chq", dayFirst=True)
+    s = import_transactions_csv_mapped(csv_text, m, session)
+    assert s["created"] == 0 and s["skipped"] == 1
+    assert len(s["errors"]) == 1
+
+
 def test_mapped_missing_column_row0_error(session):
     _setup(session)
     m = TransactionCsvMapping(
