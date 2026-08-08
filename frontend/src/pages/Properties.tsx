@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import {
+  ResponsiveContainer, BarChart, Bar, Cell, XAxis, Tooltip,
+} from 'recharts';
 import { useAppStore } from '../store/useAppStore';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -6,9 +9,9 @@ import { Button } from '../components/ui/Button';
 import { PropertyForm } from '../components/shared/PropertyForm';
 import { SnapshotEditor } from '../components/shared/SnapshotEditor';
 import { ConfirmDeleteModal } from '../components/shared/ConfirmDeleteModal';
-import { latestInvestmentSnapshot } from '../lib/kpi';
-import { cad, formatDate } from '../lib/format';
-import type { Account } from '../types';
+import { latestInvestmentSnapshot, propertyCashflow, sumCashflow } from '../lib/kpi';
+import { cad, formatDate, monthLabelShort } from '../lib/format';
+import type { Account, Fixtures } from '../types';
 
 export function Properties() {
   const fixtures = useAppStore((s) => s.fixtures)!;
@@ -134,6 +137,8 @@ export function Properties() {
                   </div>
                 )}
 
+                {prop.isRental && <RentalCashflow fixtures={fixtures} propertyId={prop.id} />}
+
                 <div className="text-xs mt-3">
                   <button
                     className="text-ink-muted hover:text-ink"
@@ -209,3 +214,61 @@ export function Properties() {
     </div>
   );
 }
+
+// Cashflow, not profit: the full mortgage payment is an outflow here because snapshots
+// can't split it into interest and principal. Tag rent and expenses on the Transactions
+// page to feed this view.
+function RentalCashflow({ fixtures, propertyId }: { fixtures: Fixtures; propertyId: string }) {
+  const points = useMemo(() => propertyCashflow(fixtures, propertyId), [fixtures, propertyId]);
+  const last12 = points.slice(-12);
+  const totals = sumCashflow(last12);
+
+  if (points.length === 0) {
+    return (
+      <div className="text-xs text-ink-dim mt-3 border-t border-line pt-2">
+        No transactions tagged to this rental yet — tag rent deposits and expenses on the
+        Transactions page to see its cashflow.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border-t border-line pt-2">
+      <div className="text-xs uppercase tracking-wider text-ink-dim">
+        Cashflow · last {last12.length} month{last12.length === 1 ? '' : 's'}
+      </div>
+      <div className="flex items-center gap-4 mt-1 text-sm">
+        <div>
+          <span className="text-xs text-ink-dim mr-1">in</span>
+          <span className="num text-up">{cad(totals.cashIn, true)}</span>
+        </div>
+        <div>
+          <span className="text-xs text-ink-dim mr-1">out</span>
+          <span className="num text-down">{cad(totals.cashOut, true)}</span>
+        </div>
+        <div>
+          <span className="text-xs text-ink-dim mr-1">net</span>
+          <span className={`num ${totals.net >= 0 ? 'text-up' : 'text-down'}`}>{cad(totals.net, true)}</span>
+        </div>
+      </div>
+      <div className="h-20 mt-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={last12}>
+            <XAxis dataKey="ym" tickFormatter={monthLabelShort} stroke="#64748b" fontSize={10} />
+            <Tooltip
+              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8 }}
+              formatter={(v: number) => cad(v, true)}
+              labelFormatter={(l) => monthLabelShort(l as string)}
+            />
+            <Bar dataKey="net" name="net" radius={[2, 2, 0, 0]}>
+              {last12.map((p) => (
+                <Cell key={p.ym} fill={p.net >= 0 ? '#34d399' : '#f87171'} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   accountReturns, latestCashBalances, latestCreditCardOwing, netWorth, netWorthByKind,
-  netWorthTrend, latestInvestmentSnapshot, round2,
+  netWorthTrend, latestInvestmentSnapshot, propertyCashflow, sumCashflow, round2,
 } from '../kpi';
 import type { Account, Fixtures, InvestmentSnapshot, Transaction } from '../../types';
 
@@ -235,6 +235,59 @@ describe('netWorth with property and mortgage', () => {
     expect(march.property).toBe(500000);
     expect(march.total).toBe(1500 + 5000 + 500000 - 400250);
     expect(april.liabilities).toBe(390250);
+  });
+});
+
+// A rental's cashflow statement: money in vs money out among transactions tagged to the
+// property. Deliberately a CASHFLOW view, not profit — the full mortgage payment counts
+// as outflow (we don't know its interest/principal split from snapshots).
+describe('propertyCashflow', () => {
+  function fxRental(): Fixtures {
+    const f = fx([]);
+    const tx = (id: string, date: string, amount: number, extra: Partial<Transaction> = {}): Transaction => ({
+      id, date, accountId: 'chq', rawMerchant: id, merchant: id, amount,
+      categoryId: 'unclassified', source: 'bank', ...extra,
+    });
+    return {
+      ...f,
+      accounts: [
+        ...f.accounts,
+        { id: 'prop1', name: 'Birch St rental', kind: 'property', institution: '88 Birch St', ownerIds: ['p1'], isRental: true },
+      ],
+      transactions: [
+        tx('rent-jan', '2026-01-01', 1800, { propertyId: 'prop1' }),
+        tx('rent-feb', '2026-02-01', 1800, { propertyId: 'prop1' }),
+        // The mortgage payment is flagged transfer by some importers — still real cash out.
+        tx('mortgage-feb', '2026-02-02', -1200, { propertyId: 'prop1', isTransfer: true }),
+        tx('repair-feb', '2026-02-15', -450, { propertyId: 'prop1' }),
+        tx('own-groceries', '2026-02-16', -100),                                   // untagged
+        tx('dupe-feb', '2026-02-17', -50, { propertyId: 'prop1', isDuplicate: true }),
+        tx('other-prop', '2026-02-18', -75, { propertyId: 'prop2' }),              // different property
+      ],
+    };
+  }
+
+  it('groups tagged transactions by month into in/out/net', () => {
+    const points = propertyCashflow(fxRental(), 'prop1');
+    expect(points).toEqual([
+      { ym: '2026-01', cashIn: 1800, cashOut: 0, net: 1800 },
+      { ym: '2026-02', cashIn: 1800, cashOut: 1650, net: 150 },
+    ]);
+  });
+
+  it('ignores untagged rows, duplicates, and other properties — but keeps transfers', () => {
+    const feb = propertyCashflow(fxRental(), 'prop1').find((p) => p.ym === '2026-02')!;
+    expect(feb.cashOut).toBe(1650); // 1200 mortgage (transfer-flagged) + 450 repair; no dupe/untagged/other
+  });
+
+  it('sumCashflow aggregates the points for a trailing view', () => {
+    expect(sumCashflow(propertyCashflow(fxRental(), 'prop1'))).toEqual({
+      cashIn: 3600, cashOut: 1650, net: 1950,
+    });
+  });
+
+  it('returns an empty list for a property with no tagged transactions', () => {
+    expect(propertyCashflow(fxRental(), 'prop_ghost')).toEqual([]);
   });
 });
 

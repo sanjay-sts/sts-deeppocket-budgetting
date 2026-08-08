@@ -362,6 +362,46 @@ export function netWorthTrend(fixtures: Fixtures): NetWorthPoint[] {
   return points;
 }
 
+// -------------------- Rental property cashflow --------------------
+// Money in vs money out among transactions tagged to a property, by month. This is a
+// CASHFLOW statement, not profit: the full mortgage payment counts as outflow (snapshots
+// don't tell us its interest/principal split), and transfer-flagged rows stay in — a
+// payment someone marked transfer is still real cash leaving the property. Duplicates
+// are excluded like everywhere else.
+
+export interface PropertyCashflowPoint {
+  ym: string;
+  cashIn: number;
+  cashOut: number;
+  net: number;
+}
+
+export function propertyCashflow(fixtures: Fixtures, propertyId: string): PropertyCashflowPoint[] {
+  const byMonth = new Map<string, { cashIn: number; cashOut: number }>();
+  for (const t of fixtures.transactions) {
+    if (t.propertyId !== propertyId || t.isDuplicate) continue;
+    const ym = monthKey(t.date);
+    const m = byMonth.get(ym) ?? { cashIn: 0, cashOut: 0 };
+    if (t.amount > 0) m.cashIn += t.amount;
+    else m.cashOut += -t.amount;
+    byMonth.set(ym, m);
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, m]) => ({
+      ym,
+      cashIn: round2(m.cashIn),
+      cashOut: round2(m.cashOut),
+      net: round2(m.cashIn - m.cashOut),
+    }));
+}
+
+export function sumCashflow(points: PropertyCashflowPoint[]): { cashIn: number; cashOut: number; net: number } {
+  const cashIn = points.reduce((a, p) => a + p.cashIn, 0);
+  const cashOut = points.reduce((a, p) => a + p.cashOut, 0);
+  return { cashIn: round2(cashIn), cashOut: round2(cashOut), net: round2(cashIn - cashOut) };
+}
+
 // -------------------- Category KPIs --------------------
 
 export interface CategorySpend {
