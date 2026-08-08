@@ -84,6 +84,12 @@ ACCOUNTS: list[dict[str, Any]] = [
     {"id": "rrsp_2",   "name": "MapleTrade RRSP (Jordan)",  "kind": "rrsp",   "institution": "mapletrade",  "ownerIds": ["p_adult2"]},
     {"id": "fhsa_1",   "name": "BlueLeaf FHSA (Avery)",  "kind": "fhsa",   "institution": "blueleaf", "ownerIds": ["p_adult1"]},
     {"id": "fhsa_2",   "name": "BlueLeaf FHSA (Jordan)",  "kind": "fhsa",   "institution": "blueleaf", "ownerIds": ["p_adult2"]},
+    # real estate — properties are assets valued by snapshots, mortgages liabilities whose
+    # snapshots are the outstanding principal. Institution holds the address / the lender.
+    {"id": "prop_residence", "name": "142 Maple Grove Ave",          "kind": "property", "institution": "142 Maple Grove Ave", "ownerIds": ["p_adult1", "p_adult2"], "purchasePrice": 610000, "purchaseDate": "2019-06-28"},
+    {"id": "mort_residence", "name": "Maple Trust Mortgage (home)",  "kind": "mortgage", "institution": "Maple Trust",         "ownerIds": ["p_adult1", "p_adult2"], "isLiability": True, "linkedAccountId": "prop_residence"},
+    {"id": "prop_rental",    "name": "88 Birch St (rental)",         "kind": "property", "institution": "88 Birch St",         "ownerIds": ["p_adult1", "p_adult2"], "isRental": True, "purchasePrice": 415000, "purchaseDate": "2022-09-15"},
+    {"id": "mort_rental",    "name": "Harbour Mortgage (rental)",    "kind": "mortgage", "institution": "Harbour",             "ownerIds": ["p_adult1", "p_adult2"], "isLiability": True, "linkedAccountId": "prop_rental"},
 ]
 
 CATEGORIES: list[dict[str, Any]] = [
@@ -122,6 +128,7 @@ CATEGORIES: list[dict[str, Any]] = [
     {"id": "dividends",       "name": "Dividends",       "group": "income"},
     {"id": "tax_refund",      "name": "Tax Refund",      "group": "income"},
     {"id": "ccb",             "name": "Canada Child Benefit","group": "income"},
+    {"id": "rental_income",   "name": "Rental Income",   "group": "income"},
     {"id": "misc_income",     "name": "Misc Income",     "group": "income"},
     # fallback
     {"id": "unclassified",    "name": "Unclassified",    "group": "lifestyle"},
@@ -256,6 +263,9 @@ RULES: list[dict[str, Any]] = [
     {"id": "r62", "matcher": {"kind": "contains", "value": "CC PAYMENT"},       "categoryId": "cc_payment",      "order": 62},
     {"id": "r63", "matcher": {"kind": "contains", "value": "SSV TO"},           "categoryId": "transfer",        "order": 63},
     {"id": "r64", "matcher": {"kind": "contains", "value": "E-TFR"},            "categoryId": "transfer",        "order": 64},
+    {"id": "r65", "matcher": {"kind": "contains", "value": "E-TRANSFER RENT"},  "categoryId": "rental_income",   "order": 65},
+    {"id": "r66", "matcher": {"kind": "contains", "value": "HARBOUR MORTGAGE"}, "categoryId": "housing",         "order": 66},
+    {"id": "r67", "matcher": {"kind": "contains", "value": "HANDYMAN"},         "categoryId": "home_maintenance","order": 67},
 ]
 
 # ---------------------------------------------------------------------------
@@ -324,8 +334,9 @@ def make_tx(
     amount: float,
     person_id: str | None = None,
     is_transfer: bool = False,
+    property_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    tx = {
         "id": txid,
         "date": iso(d),
         "accountId": account_id,
@@ -336,6 +347,9 @@ def make_tx(
         "personId": person_id,
         "isTransfer": is_transfer,
     }
+    if property_id:
+        tx["propertyId"] = property_id
+    return tx
 
 
 def gen_income_for_month(year: int, month: int, rng: random.Random, counter: list[int]) -> list[dict[str, Any]]:
@@ -409,7 +423,7 @@ def gen_income_for_month(year: int, month: int, rng: random.Random, counter: lis
 # Distributed across both adults' chequing accounts so neither one goes negative.
 RECURRING_BANK: list[dict[str, Any]] = [
     # Avery's chequing pays the mortgage + most utilities + his subscriptions
-    {"day": 1,  "account": "chequing_1", "merchant": "MAPLE TRUST MORTGAGE",     "amount": 2185.00},
+    {"day": 1,  "account": "chequing_1", "merchant": "MAPLE TRUST MORTGAGE",     "amount": 2185.00, "propertyId": "prop_residence"},
     {"day": 5,  "account": "chequing_1", "merchant": "ENBRIDGE GAS",             "amount": 74.25},
     {"day": 6,  "account": "chequing_1", "merchant": "HYDRO ONE",                "amount": 138.60},
     {"day": 8,  "account": "chequing_1", "merchant": "ROGERS COMMUNICATIONS",    "amount": 96.99},
@@ -446,6 +460,7 @@ def gen_recurring_for_month(year: int, month: int, rng: random.Random, counter: 
             account_id=r["account"],
             raw_merchant=r["merchant"],
             amount=-r["amount"],
+            property_id=r.get("propertyId"),
         ))
     for r in RECURRING_CC_SUBS:
         d = date(year, month, min(r["day"], eom.day))
@@ -466,6 +481,55 @@ def gen_recurring_for_month(year: int, month: int, rng: random.Random, counter: 
             account_id="chequing_1",
             raw_merchant="PROPERTY TAX CITY",
             amount=-995.00,
+            property_id="prop_residence",
+        ))
+    return txs
+
+
+def gen_rental_for_month(year: int, month: int, counter: list[int]) -> list[dict[str, Any]]:
+    """The Birch St rental's cash: rent in, mortgage/tax/repairs out — every row tagged
+    with propertyId so the per-property cashflow view has data. Deliberately rng-free:
+    deterministic amounts keep the rest of the fixture's random stream untouched."""
+    txs: list[dict[str, Any]] = []
+    counter[0] += 1
+    txs.append(make_tx(
+        txid=f"t{counter[0]}",
+        d=date(year, month, 1),
+        account_id="savings_joint",
+        raw_merchant="E-TRANSFER RENT 88 BIRCH ST",
+        amount=1850.00,
+        property_id="prop_rental",
+    ))
+    counter[0] += 1
+    txs.append(make_tx(
+        txid=f"t{counter[0]}",
+        d=date(year, month, 2),
+        account_id="savings_joint",
+        raw_merchant="HARBOUR MORTGAGE RENTAL",
+        amount=-1320.00,
+        property_id="prop_rental",
+    ))
+    # Quarterly rental property tax, offset from the residence's Mar/Jun/Sep/Dec cycle
+    if month in (2, 5, 8, 11):
+        counter[0] += 1
+        txs.append(make_tx(
+            txid=f"t{counter[0]}",
+            d=date(year, month, 15),
+            account_id="savings_joint",
+            raw_merchant="PROPERTY TAX CITY 88 BIRCH",
+            amount=-745.00,
+            property_id="prop_rental",
+        ))
+    # A couple of repairs a year keeps the cashflow honest without drowning it
+    if month in (4, 10):
+        counter[0] += 1
+        txs.append(make_tx(
+            txid=f"t{counter[0]}",
+            d=date(year, month, 18),
+            account_id="savings_joint",
+            raw_merchant="BIRCH ST HANDYMAN REPAIR",
+            amount=-265.00,
+            property_id="prop_rental",
         ))
     return txs
 
@@ -774,6 +838,17 @@ INV_GROWTH: dict[str, tuple[float, float]] = {
     "fhsa_2":   (0.006, 0.020),
 }
 
+# Real-estate valuation model: (value at the window's first month end, flat monthly
+# change). Deliberately linear and rng-free — property/mortgage snapshots must not
+# consume random draws, or every downstream transaction amount would shift. Mortgage
+# values are the outstanding principal, so their monthly change is negative.
+PROPERTY_MODEL: dict[str, tuple[float, float]] = {
+    "prop_residence": (648000.0, 1400.0),
+    "mort_residence": (429800.0, -1050.0),
+    "prop_rental":    (438500.0,  650.0),
+    "mort_rental":    (318200.0, -620.0),
+}
+
 INV_STARTING_VALUES: dict[str, float] = {
     "tfsa_1":    6200,
     "crypto_1":  4100,
@@ -961,14 +1036,15 @@ def generate(seed: int, num_months: int, today: date) -> dict[str, Any]:
     inv_values: dict[str, float] = dict(INV_STARTING_VALUES)
     cc_balances_at_start: dict[str, float] = {a["id"]: 0.0 for a in ACCOUNTS if a["kind"] == "credit_card"}
 
-    for (year, month) in months:
+    for month_idx, (year, month) in enumerate(months):
         income = gen_income_for_month(year, month, rng, counter)
         recurring = gen_recurring_for_month(year, month, rng, counter)
+        rental = gen_rental_for_month(year, month, counter)
         variable = gen_variable_for_month(year, month, rng, counter)
         contribs, cesgs, contrib_bank_txs = gen_contributions_for_month(year, month, counter)
         cc_payments = gen_cc_payments_for_month(year, month, cc_balances_at_start, [], counter)
 
-        month_txs = income + recurring + variable + contrib_bank_txs + cc_payments
+        month_txs = income + recurring + rental + variable + contrib_bank_txs + cc_payments
         all_txs.extend(month_txs)
         all_contribs.extend(contribs)
         all_cesgs.extend(cesgs)
@@ -995,6 +1071,11 @@ def generate(seed: int, num_months: int, today: date) -> dict[str, Any]:
         eom = end_of_month(year, month)
         for acc_id, val in inv_values.items():
             snapshots.append({"date": iso(eom), "accountId": acc_id, "amount": val})
+        for acc_id, (start, monthly) in PROPERTY_MODEL.items():
+            snapshots.append({
+                "date": iso(eom), "accountId": acc_id,
+                "amount": round(start + month_idx * monthly, 2),
+            })
 
     assign_running_totals(all_txs)
 

@@ -94,6 +94,7 @@ DEFAULT_CATEGORIES: list[dict] = [
     {"id": "dividends", "name": "Dividends", "group": "income"},
     {"id": "tax_refund", "name": "Tax Refund", "group": "income"},
     {"id": "ccb", "name": "Canada Child Benefit", "group": "income"},
+    {"id": "rental_income", "name": "Rental Income", "group": "income"},
     {"id": "misc_income", "name": "Misc Income", "group": "income"},
     # fallback for anything auto-categorization can't place
     {"id": "unclassified", "name": "Unclassified", "group": "lifestyle"},

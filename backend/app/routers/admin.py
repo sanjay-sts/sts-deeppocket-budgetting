@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from ..constants import INVESTMENT_KINDS
+from ..constants import INVESTMENT_KINDS, PROPERTY_KINDS
 from ..db import get_session
 from ..services.bootstrap import bootstrap_default_categories
 from ..models import (
@@ -25,11 +25,20 @@ def _delete_all(session: Session, model) -> None:
 
 
 def _purge_investments(session: Session) -> None:
-    # Bank accounts now share the account table — delete only investment-kind accounts
-    # and their dependents (child -> parent order).
+    # Bank accounts now share the account table — delete only the valuation domain's
+    # accounts and their dependents (child -> parent order). Property/mortgage accounts
+    # belong to that domain: this purge deletes ALL snapshots, and leaving the accounts
+    # behind would strand them as worthless assets with no value history.
     _delete_all(session, Contribution)
     _delete_all(session, InvestmentSnapshot)
-    inv_ids = {a.id for a in session.exec(select(Account)).all() if a.kind in INVESTMENT_KINDS}
+    inv_ids = {a.id for a in session.exec(select(Account)).all()
+               if a.kind in INVESTMENT_KINDS | PROPERTY_KINDS}
+    # Banking transactions survive this purge — null their tags so none dangle at a
+    # property that no longer exists.
+    for tx in session.exec(select(Transaction)).all():
+        if tx.property_id in inv_ids:
+            tx.property_id = None
+            session.add(tx)
     for model in (AccountBeneficiary, AccountOwner):
         for row in session.exec(select(model)).all():
             if row.account_id in inv_ids:
