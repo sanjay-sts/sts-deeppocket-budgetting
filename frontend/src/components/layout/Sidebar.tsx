@@ -6,6 +6,7 @@ const links = [
   { to: '/budgets', label: 'Budgets', icon: '◫' },
   { to: '/networth', label: 'Net Worth', icon: '△' },
   { to: '/investments', label: 'Investments', icon: '◉' },
+  { to: '/properties', label: 'Properties', icon: '⌂' },
   { to: '/reports', label: 'Reports', icon: '▥' },
   { to: '/insights', label: 'Insights', icon: '✦' },
   { to: '/accounts', label: 'Accounts', icon: '□' },

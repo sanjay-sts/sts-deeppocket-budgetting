@@ -12,6 +12,7 @@ const Investments = lazy(() => import('./pages/Investments').then((m) => ({ defa
 const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })));
 const Insights = lazy(() => import('./pages/Insights').then((m) => ({ default: m.Insights })));
 const Accounts = lazy(() => import('./pages/Accounts').then((m) => ({ default: m.Accounts })));
+const Properties = lazy(() => import('./pages/Properties').then((m) => ({ default: m.Properties })));
 const Import = lazy(() => import('./pages/Import').then((m) => ({ default: m.Import })));
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
 
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="insights" element={<Insights />} />
         <Route path="accounts" element={<Accounts />} />
+        <Route path="properties" element={<Properties />} />
         <Route path="import" element={<Import />} />
         <Route path="settings" element={<Settings />} />
       </Route>

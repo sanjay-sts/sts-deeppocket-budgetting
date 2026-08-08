@@ -21,8 +21,14 @@ const fixtures = {
     { id: 'chq', name: 'Sanjay TD chequing', kind: 'chequing', institution: 'TD', ownerIds: ['p1'] },
     { id: 'visa', name: 'Sanjay TD AeroPlan Card', kind: 'credit_card', institution: 'TD', ownerIds: ['p1'], isLiability: true },
     { id: 'tfsa1', name: 'Sanjay WS tfsa', kind: 'tfsa', institution: 'WS', ownerIds: ['p1'] },
+    { id: 'prop1', name: 'Maple Grove house', kind: 'property', institution: '142 Maple Grove Ave', ownerIds: ['p1'] },
+    { id: 'mort1', name: 'Maple Trust Mortgage', kind: 'mortgage', institution: 'Maple Trust', ownerIds: ['p1'], isLiability: true, linkedAccountId: 'prop1' },
   ],
-  categories: [], transactions: [], investments: [],
+  categories: [], transactions: [],
+  investments: [
+    { date: '2026-06-30', accountId: 'prop1', amount: 650000 },
+    { date: '2026-06-30', accountId: 'mort1', amount: 400000 },
+  ],
   contributionEvents: [], cesgGrants: [],
   budget: { mode: 'envelope', lines: [] }, craLimits: {},
   meta: { generatedAt: '', seed: 0, monthsCovered: 0, openingBalances: { chq: 500, visa: 333.54 } },
@@ -107,6 +113,22 @@ describe('Accounts page', () => {
     const editable = [...container.querySelectorAll('button')].filter((b) => b.textContent === 'Edit');
     // Only the chequing and credit-card tiles are editable in place.
     expect(editable).toHaveLength(2);
+  });
+
+  it('groups property and mortgage separately, read-only, linking to Properties', async () => {
+    await render();
+    expect(container.textContent).toContain('Property & mortgages');
+    // Both live in the read-only group — still only chequing + card are editable in place.
+    const editable = [...container.querySelectorAll('button')].filter((b) => b.textContent === 'Edit');
+    expect(editable).toHaveLength(2);
+    const link = [...container.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/properties');
+    expect(link).toBeDefined();
+  });
+
+  it('renders a mortgage as money owed via its liability flag, not a kind check', async () => {
+    await render();
+    expect(container.textContent).toContain('−$400,000');
+    expect(container.textContent).toContain('$650,000');
   });
 
   it('warns that deleting an account takes its transactions with it', async () => {
