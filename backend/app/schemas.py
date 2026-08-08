@@ -121,6 +121,7 @@ class TransactionPatch(BaseModel):
     isDuplicate: Optional[bool] = None
     notes: Optional[str] = None      # "" clears
     tags: Optional[list[str]] = None  # [] clears
+    propertyId: Optional[str] = None  # "" clears; must reference a property account
     # manual-only bank facts:
     date: Optional[str] = None
     merchant: Optional[str] = None
@@ -189,6 +190,7 @@ class TransactionBulkUpdate(BaseModel):
     categoryId: Optional[str] = None
     isTransfer: Optional[bool] = None
     isDuplicate: Optional[bool] = None
+    propertyId: Optional[str] = None  # "" clears; must reference a property account
 
 
 class TransactionBulkDelete(BaseModel):

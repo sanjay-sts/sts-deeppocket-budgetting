@@ -26,6 +26,14 @@ def _check_date(date: str) -> None:
         raise HTTPException(status_code=422, detail=f"Date must be YYYY-MM-DD, got {date!r}")
 
 
+def _check_property(session: Session, property_id: str) -> None:
+    # A tag pointing at a ghost or a non-property account would silently corrupt the
+    # per-property cashflow, so it's rejected the way an unknown category is.
+    target = session.get(Account, property_id)
+    if not target or target.kind != "property":
+        raise HTTPException(status_code=422, detail=f"Unknown property: {property_id}")
+
+
 @router.post("")
 def create_transaction(body: TransactionCreate, session: Session = Depends(get_session)) -> dict:
     if not session.get(Account, body.accountId):
@@ -66,6 +74,8 @@ def bulk_update(body: TransactionBulkUpdate, session: Session = Depends(get_sess
     # on bank rows), so bulk update never touches immutable facts.
     if body.categoryId is not None and not session.get(Category, body.categoryId):
         raise HTTPException(status_code=422, detail=f"Unknown category: {body.categoryId}")
+    if body.propertyId:
+        _check_property(session, body.propertyId)
     updated = 0
     not_found: list[str] = []
     for tid in body.ids:
@@ -79,6 +89,8 @@ def bulk_update(body: TransactionBulkUpdate, session: Session = Depends(get_sess
             tx.is_transfer = body.isTransfer
         if body.isDuplicate is not None:
             tx.is_duplicate = body.isDuplicate
+        if body.propertyId is not None:
+            tx.property_id = body.propertyId or None  # "" clears
         session.add(tx)
         updated += 1
     session.commit()
@@ -131,6 +143,10 @@ def patch_transaction(
         tx.notes = body.notes or None
     if body.tags is not None:
         tx.tags = json.dumps(body.tags) if body.tags else None
+    if body.propertyId is not None:
+        if body.propertyId:
+            _check_property(session, body.propertyId)
+        tx.property_id = body.propertyId or None  # "" clears
 
     if body.date is not None:
         _check_date(body.date)
