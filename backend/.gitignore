@@ -2,5 +2,9 @@
 __pycache__/
 *.pyc
 *.db
+# DB backups too — the live DB holds real imported statements, and its copies must
+# never reach a commit under any name.
+*.db.*
+*.bak
 backups/
 .pytest_cache/
