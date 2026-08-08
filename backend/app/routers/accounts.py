@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..constants import new_id, normalize_kind
+from ..constants import new_id, normalize_date, normalize_kind
 from ..models import (
     Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution, Transaction,
 )
@@ -34,15 +34,31 @@ def _out(session: Session, a: Account) -> dict:
 
 
 def _resolve_liability(kind: str, requested: bool | None) -> bool:
-    """A credit card is always a liability, whatever the client sent.
+    """A credit card or mortgage is always a liability, whatever the client sent.
 
     Net worth subtracts liabilities and lib/kpi.ts inverts credit-card sums for display,
     so a card recorded as an asset silently corrupts both. Deriving it here means no
     caller can get it wrong; every other kind honours the flag as sent.
     """
-    if kind == "credit_card":
+    if kind in ("credit_card", "mortgage"):
         return True
     return bool(requested)
+
+
+def _validated_purchase_date(raw: str) -> str:
+    try:
+        return normalize_date(raw)
+    except ValueError as e:
+        raise HTTPException(422, f"Invalid purchase date: {e}")
+
+
+def _validated_property_link(session: Session, target_id: str) -> str:
+    """linkedAccountId must reference an existing property account — a link to anything
+    else would silently corrupt every equity (value − mortgage) calculation."""
+    target = session.get(Account, target_id)
+    if not target or target.kind != "property":
+        raise HTTPException(422, "linkedAccountId must reference a property account.")
+    return target_id
 
 
 def _display_key(
@@ -118,6 +134,13 @@ def create_account(body: AccountCreate, session: Session = Depends(get_session))
         custom_name=custom_name,
         is_liability=_resolve_liability(kind, body.isLiability),
         opening_balance=body.openingBalance or 0.0,
+        is_rental=body.isRental,
+        purchase_price=body.purchasePrice,
+        purchase_date=_validated_purchase_date(body.purchaseDate) if body.purchaseDate else None,
+        linked_account_id=(
+            _validated_property_link(session, body.linkedAccountId)
+            if body.linkedAccountId else None
+        ),
     )
     session.add(a)
     for pid in body.personIds:
@@ -153,6 +176,20 @@ def update_account(account_id: str, body: AccountUpdate, session: Session = Depe
     a.is_liability = _resolve_liability(a.kind, a.is_liability)
     if body.openingBalance is not None:
         a.opening_balance = body.openingBalance
+
+    # Real-estate fields are nullable AND clearable: a key present in the request body
+    # always applies, even when its value is an explicit null (= clear the field).
+    if "isRental" in body.model_fields_set:
+        a.is_rental = body.isRental
+    if "purchasePrice" in body.model_fields_set:
+        a.purchase_price = body.purchasePrice
+    if "purchaseDate" in body.model_fields_set:
+        a.purchase_date = _validated_purchase_date(body.purchaseDate) if body.purchaseDate else None
+    if "linkedAccountId" in body.model_fields_set:
+        a.linked_account_id = (
+            _validated_property_link(session, body.linkedAccountId)
+            if body.linkedAccountId else None
+        )
 
     if body.personIds is not None:
         if not body.personIds:

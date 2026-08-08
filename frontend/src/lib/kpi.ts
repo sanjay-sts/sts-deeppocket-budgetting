@@ -244,13 +244,13 @@ export interface KindBreakdownRow {
 
 const KIND_ORDER: AccountKind[] = [
   'chequing', 'savings', 'cash', 'tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp',
-  'non_registered', 'crypto', 'credit_card',
+  'non_registered', 'crypto', 'property', 'credit_card', 'mortgage',
 ];
 const KIND_LABELS: Record<AccountKind, string> = {
   chequing: 'Chequing', savings: 'Savings', cash: 'Cash',
   tfsa: 'TFSA', rrsp: 'RRSP', resp: 'RESP', fhsa: 'FHSA',
   dcpp: 'DCPP pension', non_registered: 'Non-registered', crypto: 'Crypto',
-  credit_card: 'Credit card debt',
+  property: 'Property', credit_card: 'Credit card debt', mortgage: 'Mortgage',
 };
 
 export function netWorthByKind(fixtures: Fixtures): KindBreakdownRow[] {

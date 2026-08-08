@@ -68,6 +68,11 @@ export interface AccountInput {
    * uses. Importing a statement that carries a running total overwrites it.
    */
   openingBalance?: number;
+  /** Real-estate fields (property/mortgage kinds). Omit to leave alone on update; null clears. */
+  isRental?: boolean | null;
+  purchasePrice?: number | null;
+  purchaseDate?: string | null;
+  linkedAccountId?: string | null;
 }
 
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {

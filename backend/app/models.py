@@ -29,8 +29,18 @@ class Account(SQLModel, table=True):
     custom_name: Optional[str] = None
     is_liability: bool = False
     # Bank-account starting balance (from the M1 meta.openingBalances block); feeds the
-    # payload's meta.openingBalances, which lib/kpi.ts cash math depends on.
+    # payload's meta.openingBalances, which lib/kpi.ts cash math depends on. Unused for
+    # property/mortgage kinds, whose value is always the latest snapshot.
     opening_balance: float = 0.0
+    # Real-estate fields (property/mortgage kinds only, all optional). A mortgage points
+    # at its property via linked_account_id — plain column, no FK, so deleting the
+    # property unlinks rather than strands (mirrors Contribution.recurring_id). is_rental
+    # is what turns on the per-property cashflow view; purchase price/date enable
+    # appreciation-since-purchase.
+    is_rental: Optional[bool] = None
+    purchase_price: Optional[float] = None
+    purchase_date: Optional[str] = None   # ISO 'YYYY-MM-DD'
+    linked_account_id: Optional[str] = None
 
 
 class AccountOwner(SQLModel, table=True):
@@ -122,6 +132,10 @@ class Transaction(SQLModel, table=True):
     tags: Optional[str] = None          # JSON-encoded list[str]
     running_total: Optional[float] = None
     source: str = Field(default="bank")  # 'bank' (seed/CSV, immutable facts) | 'manual' (user-entered, fully editable)
+    # Which property this money belongs to (rent in, repairs/tax/mortgage payment out).
+    # User-editable metadata like category_id — never a bank fact. Plain column, no FK:
+    # deleting the property nulls it (services/deletion.py), the row itself survives.
+    property_id: Optional[str] = None
 
 
 class Rule(SQLModel, table=True):

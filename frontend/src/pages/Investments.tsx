@@ -35,6 +35,8 @@ const KIND_COLORS: Record<AccountKind, string> = {
   dcpp: '#c084fc',
   non_registered: '#a3e635',
   crypto: '#fb923c',
+  property: '#2dd4bf',
+  mortgage: '#fca5a5',
 };
 
 const KIND_LABEL: Record<AccountKind, string> = {
@@ -49,6 +51,8 @@ const KIND_LABEL: Record<AccountKind, string> = {
   dcpp: 'DCPP',
   non_registered: 'Non-registered',
   crypto: 'Crypto',
+  property: 'Property',
+  mortgage: 'Mortgage',
 };
 
 function ReturnCell({ value }: { value: number | null }) {

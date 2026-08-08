@@ -6,6 +6,10 @@ import uuid
 # kinds served to the frontend (must stay within the AccountKind union)
 BANK_KINDS = {"chequing", "savings", "credit_card", "cash"}
 INVESTMENT_KINDS = {"tfsa", "rrsp", "resp", "fhsa", "dcpp", "non_registered", "crypto"}
+# Real estate: a property is an asset and a mortgage a liability, both valued by
+# snapshots (latest = market value / outstanding principal). Deliberately neither bank
+# (no openingBalances entry, no cash math) nor investment (no allocation/returns).
+PROPERTY_KINDS = {"property", "mortgage"}
 
 # free-text account_type -> a legal AccountKind. Unknown types fall back to non_registered.
 KIND_MAP = {
@@ -32,6 +36,13 @@ KIND_MAP = {
     "savings": "savings",
     "credit_card": "credit_card",
     "creditcard": "credit_card",
+    # Real estate. Without these, round-tripping the generated investments.csv (which
+    # writes account_type = kind) would recreate property/mortgage rows as non_registered.
+    "property": "property",
+    "house": "property",
+    "real estate": "property",
+    "real_estate": "property",
+    "mortgage": "mortgage",
 }
 
 CONTRIBUTION_KINDS = {"tfsa", "rrsp", "resp", "fhsa"}
