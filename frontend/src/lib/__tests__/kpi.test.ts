@@ -158,6 +158,86 @@ describe('accountReturns', () => {
   });
 });
 
+// Property/mortgage kinds (M5): a property is an asset bucketed on its own, a mortgage
+// a liability whose outstanding principal comes from snapshots. Equity is derived
+// (value − mortgage) on the Properties page, never a bucket of its own.
+describe('netWorth with property and mortgage', () => {
+  function fxProperty(): Fixtures {
+    const accounts: Account[] = [
+      { id: 'chq', name: 'Chequing', kind: 'chequing', institution: 'RBC', ownerIds: ['p1'] },
+      { id: 'tfsa1', name: 'TFSA', kind: 'tfsa', institution: 'WS', ownerIds: ['p1'] },
+      {
+        id: 'prop1', name: 'Maple Grove house', kind: 'property',
+        institution: '142 Maple Grove Ave', ownerIds: ['p1'],
+        isRental: true, purchasePrice: 400000, purchaseDate: '2019-06-28',
+      },
+      {
+        id: 'mort1', name: 'Maple Trust Mortgage', kind: 'mortgage', institution: 'Maple Trust',
+        ownerIds: ['p1'], isLiability: true, linkedAccountId: 'prop1',
+      },
+      { id: 'cc1', name: 'Visa', kind: 'credit_card', institution: 'RBC', ownerIds: ['p1'], isLiability: true },
+    ];
+    const transactions: Transaction[] = [
+      { id: 't1', date: '2025-03-01', accountId: 'chq', rawMerchant: 'X', merchant: 'X', amount: 1000, categoryId: 'salary', source: 'bank' },
+      { id: 't2', date: '2025-03-05', accountId: 'cc1', rawMerchant: 'Y', merchant: 'Y', amount: -250, categoryId: 'groceries', source: 'bank' },
+    ];
+    const f = fx([
+      { date: '2025-03-31', accountId: 'tfsa1', amount: 5000 },
+      { date: '2025-03-31', accountId: 'prop1', amount: 500000 },
+      // Two April valuations for the property: hand-entered snapshots aren't guaranteed
+      // to be one-per-month, so within a month only the latest may count.
+      { date: '2025-04-15', accountId: 'prop1', amount: 505000 },
+      { date: '2025-04-30', accountId: 'prop1', amount: 520000 },
+      { date: '2025-03-31', accountId: 'mort1', amount: 400000 },
+      { date: '2025-04-30', accountId: 'mort1', amount: 390000 },
+    ]);
+    return { ...f, accounts, transactions, meta: { ...f.meta, openingBalances: { chq: 500 } } };
+  }
+
+  it('buckets the property on its own and keeps it out of investments', () => {
+    const nw = netWorth(fxProperty());
+    expect(nw.property).toBe(520000);
+    expect(nw.investments).toBe(5000);
+  });
+
+  it('subtracts the mortgage principal alongside credit-card owing', () => {
+    const nw = netWorth(fxProperty());
+    expect(nw.liabilities).toBe(390250); // 390k principal + 250 on the card
+    expect(nw.total).toBe(1500 + 5000 + 520000 - 390250);
+  });
+
+  it('byAccount carries the right buckets, mortgage negated so rows sum to total', () => {
+    const by = new Map(netWorth(fxProperty()).byAccount.map((b) => [b.accountId, b]));
+    expect(by.get('prop1')).toEqual({ accountId: 'prop1', value: 520000, bucket: 'property' });
+    expect(by.get('mort1')).toEqual({ accountId: 'mort1', value: -390000, bucket: 'liabilities' });
+    const sum = round2(netWorth(fxProperty()).byAccount.reduce((a, b) => a + b.value, 0));
+    expect(sum).toBe(netWorth(fxProperty()).total);
+  });
+
+  it('netWorthByKind shows Property and Mortgage rows that sum to the total', () => {
+    const rows = netWorthByKind(fxProperty());
+    expect(rows.find((r) => r.kind === 'property')).toMatchObject({ label: 'Property', value: 520000 });
+    expect(rows.find((r) => r.kind === 'mortgage')).toMatchObject({ label: 'Mortgage', value: -390000 });
+    expect(round2(rows.reduce((a, r) => a + r.value, 0))).toBe(netWorth(fxProperty()).total);
+    expect(rows.map((r) => r.kind)).toEqual(['chequing', 'tfsa', 'property', 'credit_card', 'mortgage']);
+  });
+
+  it('trend counts a same-month duplicate valuation once — latest wins', () => {
+    const april = netWorthTrend(fxProperty()).find((p) => p.ym === '2025-04')!;
+    expect(april.property).toBe(520000); // not 1,025,000
+  });
+
+  it('trend subtracts the mortgage each month without the credit-card zero-clamp', () => {
+    const points = netWorthTrend(fxProperty());
+    const march = points.find((p) => p.ym === '2025-03')!;
+    const april = points.find((p) => p.ym === '2025-04')!;
+    expect(march.liabilities).toBe(400250); // 400k principal + 250 card
+    expect(march.property).toBe(500000);
+    expect(march.total).toBe(1500 + 5000 + 500000 - 400250);
+    expect(april.liabilities).toBe(390250);
+  });
+});
+
 describe('netWorth investments', () => {
   it('uses the latest snapshot per account', () => {
     const f = fx([

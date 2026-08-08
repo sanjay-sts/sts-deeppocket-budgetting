@@ -204,31 +204,55 @@ export function accountReturns(snapshots: InvestmentSnapshot[], accountId: strin
 export interface NetWorthBreakdown {
   cash: number;
   investments: number;
+  property: number;
   liabilities: number;
   total: number;
-  byAccount: { accountId: string; value: number; bucket: 'cash' | 'investments' | 'liabilities' }[];
+  byAccount: { accountId: string; value: number; bucket: 'cash' | 'investments' | 'property' | 'liabilities' }[];
+}
+
+// Snapshots are shared by three account families, split by the owning account:
+// property kind → property bucket, liability accounts (mortgages) → debt to subtract,
+// everything else → investments. Credit cards stay transaction-derived — they never
+// carry snapshots, so a card can't be double-counted here.
+function splitSnapshots(fixtures: Fixtures, snaps: InvestmentSnapshot[]) {
+  const accById = new Map(fixtures.accounts.map((a) => [a.id, a]));
+  const investments: InvestmentSnapshot[] = [];
+  const property: InvestmentSnapshot[] = [];
+  const debt: InvestmentSnapshot[] = [];
+  for (const s of snaps) {
+    const acc = accById.get(s.accountId);
+    if (acc?.kind === 'property') property.push(s);
+    else if (acc?.isLiability) debt.push(s);
+    else investments.push(s);
+  }
+  return { investments, property, debt };
 }
 
 export function netWorth(fixtures: Fixtures): NetWorthBreakdown {
   const cashBalances = latestCashBalances(fixtures);
   const ccOwed = latestCreditCardOwing(fixtures);
-  const latestInv = latestInvestmentSnapshot(fixtures);
+  const split = splitSnapshots(fixtures, latestInvestmentSnapshot(fixtures));
 
   const cash = cashBalances.reduce((a, b) => a + b.balance, 0);
-  const investments = latestInv.reduce((a, s) => a + s.amount, 0);
-  const liabilities = ccOwed.reduce((a, b) => a + b.balance, 0);
+  const investments = split.investments.reduce((a, s) => a + s.amount, 0);
+  const property = split.property.reduce((a, s) => a + s.amount, 0);
+  const liabilities = ccOwed.reduce((a, b) => a + b.balance, 0)
+    + split.debt.reduce((a, s) => a + s.amount, 0);
 
   const byAccount: NetWorthBreakdown['byAccount'] = [
     ...cashBalances.map((b) => ({ accountId: b.accountId, value: b.balance, bucket: 'cash' as const })),
-    ...latestInv.map((s) => ({ accountId: s.accountId, value: s.amount, bucket: 'investments' as const })),
+    ...split.investments.map((s) => ({ accountId: s.accountId, value: s.amount, bucket: 'investments' as const })),
+    ...split.property.map((s) => ({ accountId: s.accountId, value: s.amount, bucket: 'property' as const })),
     ...ccOwed.map((b) => ({ accountId: b.accountId, value: -b.balance, bucket: 'liabilities' as const })),
+    ...split.debt.map((s) => ({ accountId: s.accountId, value: -s.amount, bucket: 'liabilities' as const })),
   ];
 
   return {
     cash: round2(cash),
     investments: round2(investments),
+    property: round2(property),
     liabilities: round2(liabilities),
-    total: round2(cash + investments - liabilities),
+    total: round2(cash + investments + property - liabilities),
     byAccount,
   };
 }
@@ -274,6 +298,7 @@ export interface NetWorthPoint {
   ym: string;
   cash: number;
   investments: number;
+  property: number;
   liabilities: number;
   total: number;
 }
@@ -308,18 +333,30 @@ export function netWorthTrend(fixtures: Fixtures): NetWorthPoint[] {
     const ccDelta = fixtures.transactions
       .filter((t) => ccAccountIds.has(t.accountId) && monthKey(t.date) <= ym)
       .reduce((a, t) => a + t.amount, 0);
-    const liabilities = Math.max(0, ccOpening - ccDelta);
+    // The zero-clamp is a per-card overpayment guard; the mortgage principal added
+    // below must never be swallowed by it.
+    const ccOwed = Math.max(0, ccOpening - ccDelta);
 
-    // Investments = sum of latest snapshot for this month per account
-    const thisMonthSnaps = fixtures.investments.filter((s) => monthKey(s.date) === ym);
-    const investments = thisMonthSnaps.reduce((a, s) => a + s.amount, 0);
+    // Latest snapshot per account within this month — hand-entered valuations aren't
+    // guaranteed to be one-per-month, and summing two would double-count the asset.
+    const latestByAcc = new Map<string, InvestmentSnapshot>();
+    for (const s of [...fixtures.investments]
+      .filter((s) => monthKey(s.date) === ym)
+      .sort((a, b) => a.date.localeCompare(b.date))) {
+      latestByAcc.set(s.accountId, s);
+    }
+    const split = splitSnapshots(fixtures, [...latestByAcc.values()]);
+    const investments = split.investments.reduce((a, s) => a + s.amount, 0);
+    const property = split.property.reduce((a, s) => a + s.amount, 0);
+    const liabilities = ccOwed + split.debt.reduce((a, s) => a + s.amount, 0);
 
     points.push({
       ym,
       cash: round2(cash),
       investments: round2(investments),
+      property: round2(property),
       liabilities: round2(liabilities),
-      total: round2(cash + investments - liabilities),
+      total: round2(cash + investments + property - liabilities),
     });
   }
   return points;
