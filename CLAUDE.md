@@ -91,6 +91,13 @@ Run from `backend/` (needs [uv](https://docs.astral.sh/uv/)):
 | `uv run seed.py` | seed `deeppocket.db` — after any schema change, delete `deeppocket.db` first (seed.py adds tables but never alters existing ones) |
 | `uv run uvicorn app.main:app --port 8000` | API server (frontend dev server proxies `/api` → :8000) |
 
+**The database is SQLite — not SurrealDB or Postgres.** Those belong to sibling FoundryCore
+repos (`agentprint` runs SurrealDB, `sts-adk-go-…` runs Postgres). That matters at dev time:
+agentprint's SurrealDB listens on `[::1]:8000` while uvicorn binds `127.0.0.1:8000`. The Vite
+proxy targets `localhost:8000`, which Windows resolves to `::1` first, so every `/api` call
+gets a SurrealDB 404 and the app hangs on "Loading fixtures…". `vite.config.ts` therefore
+targets `127.0.0.1:8000` explicitly — keep it that way.
+
 Regenerate mock data (from repo root, needs Python 3.11+):
 
 ```
