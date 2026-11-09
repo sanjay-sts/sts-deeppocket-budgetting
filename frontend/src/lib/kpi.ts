@@ -16,10 +16,15 @@ import type {
 } from '../types';
 import { daysInMonth, monthKey } from './format';
 
+// The household's primary goal is its savings rate; screens compare against this.
+export const SAVINGS_RATE_TARGET = 0.3;
+
 export interface MonthTotals {
   ym: string;
   income: number;
   expense: number;
+  /** Money moved into savings-bucket categories (e.g. Investments) — saved, not spent. */
+  invested: number;
   net: number;
   savingsRate: number;
 }
@@ -39,11 +44,19 @@ function catIndex(categories: Category[]): Map<CategoryId, Category> {
   return new Map(categories.map((c) => [c.id, c]));
 }
 
+// A savings-bucket category (Investments) moves money into savings — counting it as
+// spending would make every contribution *lower* the savings rate.
+function isSaving(t: Transaction, cats: Map<CategoryId, Category>): boolean {
+  if (t.isTransfer) return false;
+  return cats.get(t.categoryId)?.bucket503020 === 'savings' && t.amount < 0;
+}
+
 function isSpend(t: Transaction, cats: Map<CategoryId, Category>): boolean {
   if (t.isTransfer) return false;
   const c = cats.get(t.categoryId);
   if (!c) return false;
   if (c.group === 'transfers' || c.group === 'income') return false;
+  if (c.bucket503020 === 'savings') return false;
   return t.amount < 0;
 }
 
@@ -63,12 +76,14 @@ export function monthTotals(fixtures: Fixtures): MonthTotals[] {
     const txs = m.get(ym)!;
     const income = txs.reduce((acc, t) => (isIncome(t, cats) ? acc + t.amount : acc), 0);
     const expense = txs.reduce((acc, t) => (isSpend(t, cats) ? acc + -t.amount : acc), 0);
+    const invested = txs.reduce((acc, t) => (isSaving(t, cats) ? acc + -t.amount : acc), 0);
     const net = income - expense;
     const savingsRate = income > 0 ? net / income : 0;
     out.push({
       ym,
       income: round2(income),
       expense: round2(expense),
+      invested: round2(invested),
       net: round2(net),
       savingsRate,
     });
@@ -81,6 +96,7 @@ export function monthTotalsFor(fixtures: Fixtures, ym: string): MonthTotals {
     ym,
     income: 0,
     expense: 0,
+    invested: 0,
     net: 0,
     savingsRate: 0,
   };

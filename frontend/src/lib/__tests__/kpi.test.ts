@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   accountReturns, latestCashBalances, latestCreditCardOwing, netWorth, netWorthByKind,
   netWorthTrend, latestInvestmentSnapshot, propertyCashflow, sumCashflow, round2,
+  monthTotals, spendByCategory, SAVINGS_RATE_TARGET,
 } from '../kpi';
 import type { Account, Fixtures, InvestmentSnapshot, Transaction } from '../../types';
 
@@ -306,5 +307,42 @@ describe('netWorth investments', () => {
     expect(netWorth(f).investments).toBe(1000);
     f.investments.push({ date: '2025-03-31', accountId: 'inv1', amount: 2000 });
     expect(netWorth(f).investments).toBe(2000);
+  });
+});
+
+describe('monthTotals — money moved into savings is not spending', () => {
+  // Salary 10,000; groceries 6,000; 1,000 into a savings-bucket category (Investments).
+  // Saving is the opposite of spending: the 1,000 must raise the savings rate, not lower it.
+  function fxSavings(): Fixtures {
+    const base = fx([]);
+    const tx = (id: string, amount: number, categoryId: string): Transaction => ({
+      id, date: '2026-08-15', accountId: 'chq', rawMerchant: id, merchant: id, amount, categoryId, source: 'bank',
+    });
+    return {
+      ...base,
+      categories: [
+        { id: 'salary', name: 'Salary', group: 'income' },
+        { id: 'groceries', name: 'Groceries', group: 'essentials', bucket503020: 'needs' },
+        { id: 'investments_out', name: 'Investments', group: 'financial', bucket503020: 'savings' },
+      ],
+      transactions: [tx('pay', 10000, 'salary'), tx('food', -6000, 'groceries'), tx('ws', -1000, 'investments_out')],
+    };
+  }
+
+  it('excludes savings from expense and reports it as invested', () => {
+    const [m] = monthTotals(fxSavings());
+    expect(m.income).toBe(10000);
+    expect(m.expense).toBe(6000);
+    expect(m.invested).toBe(1000);
+    expect(m.net).toBe(4000);
+    expect(m.savingsRate).toBeCloseTo(0.4);
+  });
+
+  it('keeps savings out of category spend', () => {
+    expect(spendByCategory(fxSavings(), '2026-08').map((c) => c.categoryId)).toEqual(['groceries']);
+  });
+
+  it('targets a 30% savings rate', () => {
+    expect(SAVINGS_RATE_TARGET).toBe(0.3);
   });
 });

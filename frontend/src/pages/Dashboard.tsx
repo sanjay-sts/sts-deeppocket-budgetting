@@ -22,6 +22,7 @@ import {
   netWorthTrend,
   spendByCategory,
   burnRate3mo,
+  SAVINGS_RATE_TARGET,
   budgetStatus,
 } from '../lib/kpi';
 import { cad, cadK, monthLabelShort, pct } from '../lib/format';
@@ -88,10 +89,10 @@ export function Dashboard() {
       text: `${over.length} ${over.length === 1 ? 'category is' : 'categories are'} over budget this month`,
     });
   }
-  if (thisMonth.savingsRate < 0.1 && thisMonth.income > 0) {
+  if (thisMonth.savingsRate < SAVINGS_RATE_TARGET && thisMonth.income > 0) {
     alerts.push({
       tone: 'warning',
-      text: `Savings rate dropped to ${pct(thisMonth.savingsRate, 0)} — target is 20%`,
+      text: `Savings rate is ${pct(thisMonth.savingsRate, 0)} — target is ${pct(SAVINGS_RATE_TARGET, 0)}`,
     });
   }
   if (thisMonth.expense > burn * 1.2 && burn > 0) {
@@ -135,7 +136,7 @@ export function Dashboard() {
           value={pct(thisMonth.savingsRate, 0)}
           deltaPctValue={savingsRateDelta}
           spark={savingsSpark}
-          hint={`target 20% · burn ${cadK(burn)}/mo`}
+          hint={`target ${pct(SAVINGS_RATE_TARGET, 0)} · ${cadK(thisMonth.invested)} invested · burn ${cadK(burn)}/mo`}
         />
         <KpiCard
           label="Investments"
