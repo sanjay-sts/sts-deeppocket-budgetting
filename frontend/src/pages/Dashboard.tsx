@@ -61,6 +61,8 @@ export function Dashboard() {
 
   const incomeDelta = prev && prev.income ? (thisMonth.income - prev.income) / prev.income : 0;
   const expenseDelta = prev && prev.expense ? (thisMonth.expense - prev.expense) / prev.expense : 0;
+  const totalExpenseDelta =
+    prev && prev.totalExpense ? (thisMonth.totalExpense - prev.totalExpense) / prev.totalExpense : 0;
   const savingsRateDelta = prev ? thisMonth.savingsRate - prev.savingsRate : 0;
 
   const latestInvTotal = nw.investments;
@@ -104,13 +106,14 @@ export function Dashboard() {
 
   const incomeSpark = totals.map((m) => m.income);
   const expenseSpark = totals.map((m) => m.expense);
+  const totalExpenseSpark = totals.map((m) => m.totalExpense);
   const savingsSpark = totals.map((m) => Math.max(0, m.savingsRate * 100));
   const nwSpark = trend.map((p) => p.total);
   const invSpark = trend.map((p) => p.investments);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <KpiCard
           label="Net Worth"
           value={cad(nw.total, true)}
@@ -125,11 +128,20 @@ export function Dashboard() {
           spark={incomeSpark}
         />
         <KpiCard
-          label="Monthly Expenses"
+          label="Total Expenses"
+          value={cad(thisMonth.totalExpense, true)}
+          deltaPctValue={totalExpenseDelta}
+          spark={totalExpenseSpark}
+          positiveIsGood={false}
+          hint={`incl. ${cad(thisMonth.invested, true)} investments`}
+        />
+        <KpiCard
+          label="Expenses excl. Investments"
           value={cad(thisMonth.expense, true)}
           deltaPctValue={expenseDelta}
           spark={expenseSpark}
           positiveIsGood={false}
+          hint="day-to-day spending · what the budget tracks"
         />
         <KpiCard
           label="Savings Rate"
@@ -205,7 +217,11 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2" title="Income vs Expenses" subtitle="12 months trailing">
+        <Card
+          className="lg:col-span-2"
+          title="Income vs Expenses"
+          subtitle="12 months trailing · red + amber stack = total expense, amber = investments"
+        >
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={totals}>
@@ -217,8 +233,10 @@ export function Dashboard() {
                   formatter={(v: number) => cad(v, true)}
                   labelFormatter={(l) => monthLabelShort(l as string)}
                 />
-                <Bar dataKey="income" fill="#34d399" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="expense" fill="#f87171" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="income" name="Income" fill="#34d399" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="expense" name="Expenses (excl. investments)" stackId="out" fill="#f87171" />
+                <Bar dataKey="invested" name="Investments" stackId="out" fill="#fbbf24" radius={[3, 3, 0, 0]} />
+                <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
               </BarChart>
             </ResponsiveContainer>
           </div>

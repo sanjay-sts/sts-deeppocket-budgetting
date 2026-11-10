@@ -334,6 +334,7 @@ describe('monthTotals — money moved into savings is not spending', () => {
     expect(m.income).toBe(10000);
     expect(m.expense).toBe(6000);
     expect(m.invested).toBe(1000);
+    expect(m.totalExpense).toBe(7000);
     expect(m.net).toBe(4000);
     expect(m.savingsRate).toBeCloseTo(0.4);
   });

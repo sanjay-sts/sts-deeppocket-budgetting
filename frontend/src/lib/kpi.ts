@@ -25,6 +25,8 @@ export interface MonthTotals {
   expense: number;
   /** Money moved into savings-bucket categories (e.g. Investments) — saved, not spent. */
   invested: number;
+  /** Everything that left: spending plus money moved into investments (`expense + invested`). */
+  totalExpense: number;
   net: number;
   savingsRate: number;
 }
@@ -84,6 +86,7 @@ export function monthTotals(fixtures: Fixtures): MonthTotals[] {
       income: round2(income),
       expense: round2(expense),
       invested: round2(invested),
+      totalExpense: round2(expense + invested),
       net: round2(net),
       savingsRate,
     });
@@ -97,6 +100,7 @@ export function monthTotalsFor(fixtures: Fixtures, ym: string): MonthTotals {
     income: 0,
     expense: 0,
     invested: 0,
+    totalExpense: 0,
     net: 0,
     savingsRate: 0,
   };
