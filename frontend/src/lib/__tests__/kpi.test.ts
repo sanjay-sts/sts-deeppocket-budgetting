@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   accountReturns, latestCashBalances, latestCreditCardOwing, netWorth, netWorthByKind,
-  netWorthTrend, latestInvestmentSnapshot, round2,
+  netWorthTrend, latestInvestmentSnapshot, propertyCashflow, sumCashflow, round2,
+  monthTotals, spendByCategory, SAVINGS_RATE_TARGET,
 } from '../kpi';
 import type { Account, Fixtures, InvestmentSnapshot, Transaction } from '../../types';
 
@@ -158,6 +159,139 @@ describe('accountReturns', () => {
   });
 });
 
+// Property/mortgage kinds (M5): a property is an asset bucketed on its own, a mortgage
+// a liability whose outstanding principal comes from snapshots. Equity is derived
+// (value − mortgage) on the Properties page, never a bucket of its own.
+describe('netWorth with property and mortgage', () => {
+  function fxProperty(): Fixtures {
+    const accounts: Account[] = [
+      { id: 'chq', name: 'Chequing', kind: 'chequing', institution: 'RBC', ownerIds: ['p1'] },
+      { id: 'tfsa1', name: 'TFSA', kind: 'tfsa', institution: 'WS', ownerIds: ['p1'] },
+      {
+        id: 'prop1', name: 'Maple Grove house', kind: 'property',
+        institution: '142 Maple Grove Ave', ownerIds: ['p1'],
+        isRental: true, purchasePrice: 400000, purchaseDate: '2019-06-28',
+      },
+      {
+        id: 'mort1', name: 'Maple Trust Mortgage', kind: 'mortgage', institution: 'Maple Trust',
+        ownerIds: ['p1'], isLiability: true, linkedAccountId: 'prop1',
+      },
+      { id: 'cc1', name: 'Visa', kind: 'credit_card', institution: 'RBC', ownerIds: ['p1'], isLiability: true },
+    ];
+    const transactions: Transaction[] = [
+      { id: 't1', date: '2025-03-01', accountId: 'chq', rawMerchant: 'X', merchant: 'X', amount: 1000, categoryId: 'salary', source: 'bank' },
+      { id: 't2', date: '2025-03-05', accountId: 'cc1', rawMerchant: 'Y', merchant: 'Y', amount: -250, categoryId: 'groceries', source: 'bank' },
+    ];
+    const f = fx([
+      { date: '2025-03-31', accountId: 'tfsa1', amount: 5000 },
+      { date: '2025-03-31', accountId: 'prop1', amount: 500000 },
+      // Two April valuations for the property: hand-entered snapshots aren't guaranteed
+      // to be one-per-month, so within a month only the latest may count.
+      { date: '2025-04-15', accountId: 'prop1', amount: 505000 },
+      { date: '2025-04-30', accountId: 'prop1', amount: 520000 },
+      { date: '2025-03-31', accountId: 'mort1', amount: 400000 },
+      { date: '2025-04-30', accountId: 'mort1', amount: 390000 },
+    ]);
+    return { ...f, accounts, transactions, meta: { ...f.meta, openingBalances: { chq: 500 } } };
+  }
+
+  it('buckets the property on its own and keeps it out of investments', () => {
+    const nw = netWorth(fxProperty());
+    expect(nw.property).toBe(520000);
+    expect(nw.investments).toBe(5000);
+  });
+
+  it('subtracts the mortgage principal alongside credit-card owing', () => {
+    const nw = netWorth(fxProperty());
+    expect(nw.liabilities).toBe(390250); // 390k principal + 250 on the card
+    expect(nw.total).toBe(1500 + 5000 + 520000 - 390250);
+  });
+
+  it('byAccount carries the right buckets, mortgage negated so rows sum to total', () => {
+    const by = new Map(netWorth(fxProperty()).byAccount.map((b) => [b.accountId, b]));
+    expect(by.get('prop1')).toEqual({ accountId: 'prop1', value: 520000, bucket: 'property' });
+    expect(by.get('mort1')).toEqual({ accountId: 'mort1', value: -390000, bucket: 'liabilities' });
+    const sum = round2(netWorth(fxProperty()).byAccount.reduce((a, b) => a + b.value, 0));
+    expect(sum).toBe(netWorth(fxProperty()).total);
+  });
+
+  it('netWorthByKind shows Property and Mortgage rows that sum to the total', () => {
+    const rows = netWorthByKind(fxProperty());
+    expect(rows.find((r) => r.kind === 'property')).toMatchObject({ label: 'Property', value: 520000 });
+    expect(rows.find((r) => r.kind === 'mortgage')).toMatchObject({ label: 'Mortgage', value: -390000 });
+    expect(round2(rows.reduce((a, r) => a + r.value, 0))).toBe(netWorth(fxProperty()).total);
+    expect(rows.map((r) => r.kind)).toEqual(['chequing', 'tfsa', 'property', 'credit_card', 'mortgage']);
+  });
+
+  it('trend counts a same-month duplicate valuation once — latest wins', () => {
+    const april = netWorthTrend(fxProperty()).find((p) => p.ym === '2025-04')!;
+    expect(april.property).toBe(520000); // not 1,025,000
+  });
+
+  it('trend subtracts the mortgage each month without the credit-card zero-clamp', () => {
+    const points = netWorthTrend(fxProperty());
+    const march = points.find((p) => p.ym === '2025-03')!;
+    const april = points.find((p) => p.ym === '2025-04')!;
+    expect(march.liabilities).toBe(400250); // 400k principal + 250 card
+    expect(march.property).toBe(500000);
+    expect(march.total).toBe(1500 + 5000 + 500000 - 400250);
+    expect(april.liabilities).toBe(390250);
+  });
+});
+
+// A rental's cashflow statement: money in vs money out among transactions tagged to the
+// property. Deliberately a CASHFLOW view, not profit — the full mortgage payment counts
+// as outflow (we don't know its interest/principal split from snapshots).
+describe('propertyCashflow', () => {
+  function fxRental(): Fixtures {
+    const f = fx([]);
+    const tx = (id: string, date: string, amount: number, extra: Partial<Transaction> = {}): Transaction => ({
+      id, date, accountId: 'chq', rawMerchant: id, merchant: id, amount,
+      categoryId: 'unclassified', source: 'bank', ...extra,
+    });
+    return {
+      ...f,
+      accounts: [
+        ...f.accounts,
+        { id: 'prop1', name: 'Birch St rental', kind: 'property', institution: '88 Birch St', ownerIds: ['p1'], isRental: true },
+      ],
+      transactions: [
+        tx('rent-jan', '2026-01-01', 1800, { propertyId: 'prop1' }),
+        tx('rent-feb', '2026-02-01', 1800, { propertyId: 'prop1' }),
+        // The mortgage payment is flagged transfer by some importers — still real cash out.
+        tx('mortgage-feb', '2026-02-02', -1200, { propertyId: 'prop1', isTransfer: true }),
+        tx('repair-feb', '2026-02-15', -450, { propertyId: 'prop1' }),
+        tx('own-groceries', '2026-02-16', -100),                                   // untagged
+        tx('dupe-feb', '2026-02-17', -50, { propertyId: 'prop1', isDuplicate: true }),
+        tx('other-prop', '2026-02-18', -75, { propertyId: 'prop2' }),              // different property
+      ],
+    };
+  }
+
+  it('groups tagged transactions by month into in/out/net', () => {
+    const points = propertyCashflow(fxRental(), 'prop1');
+    expect(points).toEqual([
+      { ym: '2026-01', cashIn: 1800, cashOut: 0, net: 1800 },
+      { ym: '2026-02', cashIn: 1800, cashOut: 1650, net: 150 },
+    ]);
+  });
+
+  it('ignores untagged rows, duplicates, and other properties — but keeps transfers', () => {
+    const feb = propertyCashflow(fxRental(), 'prop1').find((p) => p.ym === '2026-02')!;
+    expect(feb.cashOut).toBe(1650); // 1200 mortgage (transfer-flagged) + 450 repair; no dupe/untagged/other
+  });
+
+  it('sumCashflow aggregates the points for a trailing view', () => {
+    expect(sumCashflow(propertyCashflow(fxRental(), 'prop1'))).toEqual({
+      cashIn: 3600, cashOut: 1650, net: 1950,
+    });
+  });
+
+  it('returns an empty list for a property with no tagged transactions', () => {
+    expect(propertyCashflow(fxRental(), 'prop_ghost')).toEqual([]);
+  });
+});
+
 describe('netWorth investments', () => {
   it('uses the latest snapshot per account', () => {
     const f = fx([
@@ -173,5 +307,43 @@ describe('netWorth investments', () => {
     expect(netWorth(f).investments).toBe(1000);
     f.investments.push({ date: '2025-03-31', accountId: 'inv1', amount: 2000 });
     expect(netWorth(f).investments).toBe(2000);
+  });
+});
+
+describe('monthTotals — money moved into savings is not spending', () => {
+  // Salary 10,000; groceries 6,000; 1,000 into a savings-bucket category (Investments).
+  // Saving is the opposite of spending: the 1,000 must raise the savings rate, not lower it.
+  function fxSavings(): Fixtures {
+    const base = fx([]);
+    const tx = (id: string, amount: number, categoryId: string): Transaction => ({
+      id, date: '2026-08-15', accountId: 'chq', rawMerchant: id, merchant: id, amount, categoryId, source: 'bank',
+    });
+    return {
+      ...base,
+      categories: [
+        { id: 'salary', name: 'Salary', group: 'income' },
+        { id: 'groceries', name: 'Groceries', group: 'essentials', bucket503020: 'needs' },
+        { id: 'investments_out', name: 'Investments', group: 'financial', bucket503020: 'savings' },
+      ],
+      transactions: [tx('pay', 10000, 'salary'), tx('food', -6000, 'groceries'), tx('ws', -1000, 'investments_out')],
+    };
+  }
+
+  it('excludes savings from expense and reports it as invested', () => {
+    const [m] = monthTotals(fxSavings());
+    expect(m.income).toBe(10000);
+    expect(m.expense).toBe(6000);
+    expect(m.invested).toBe(1000);
+    expect(m.totalExpense).toBe(7000);
+    expect(m.net).toBe(4000);
+    expect(m.savingsRate).toBeCloseTo(0.4);
+  });
+
+  it('keeps savings out of category spend', () => {
+    expect(spendByCategory(fxSavings(), '2026-08').map((c) => c.categoryId)).toEqual(['groceries']);
+  });
+
+  it('targets a 30% savings rate', () => {
+    expect(SAVINGS_RATE_TARGET).toBe(0.3);
   });
 });

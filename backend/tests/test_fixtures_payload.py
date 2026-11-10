@@ -17,7 +17,7 @@ def test_payload_is_composed_entirely_from_db(session):
     seed(session)
     payload = build_payload(session)
     assert set(payload.keys()) == EXPECTED_KEYS
-    assert len(payload["transactions"]) == 864
+    assert len(payload["transactions"]) == 894
     assert payload["craLimits"]["TFSA_ANNUAL"] == 7000
     assert payload["meta"]["openingBalances"]["chequing_1"] == 11250.0
     assert payload["meta"]["seed"] == 42

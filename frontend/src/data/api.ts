@@ -68,6 +68,11 @@ export interface AccountInput {
    * uses. Importing a statement that carries a running total overwrites it.
    */
   openingBalance?: number;
+  /** Real-estate fields (property/mortgage kinds). Omit to leave alone on update; null clears. */
+  isRental?: boolean | null;
+  purchasePrice?: number | null;
+  purchaseDate?: string | null;
+  linkedAccountId?: string | null;
 }
 
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -161,6 +166,7 @@ export interface TransactionPatchInput {
   isDuplicate?: boolean;
   notes?: string;   // '' clears
   tags?: string[];  // [] clears
+  propertyId?: string; // '' clears; must reference a property account
   // manual rows only — 422 on bank rows:
   date?: string;
   merchant?: string;
@@ -310,6 +316,7 @@ export interface BulkUpdateInput {
   categoryId?: string;
   isTransfer?: boolean;
   isDuplicate?: boolean;
+  propertyId?: string; // '' clears; must reference a property account
 }
 export interface BulkUpdateResult { updated: number; notFound: string[] }
 export interface BulkDeleteResult { deleted: number; skippedNonManual: string[]; notFound: string[] }

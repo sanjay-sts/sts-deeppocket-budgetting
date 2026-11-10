@@ -28,18 +28,25 @@ export type AccountKind =
   | 'fhsa'
   | 'dcpp'
   | 'non_registered'
-  | 'crypto';
+  | 'crypto'
+  | 'property'
+  | 'mortgage';
 
 export interface Account {
   id: AccountId;
   name: string; // computed display name: custom override, else owners + institution + type
   customName?: string; // present only when a custom name override is set
   kind: AccountKind;
-  institution: string;
+  institution: string; // for a property this holds the address; for a mortgage, the lender
   accountType?: string;
   ownerIds: PersonId[];
   beneficiaryIds?: PersonId[];
   isLiability?: boolean;
+  /** Real-estate fields (property/mortgage kinds). Value comes from snapshots, never here. */
+  isRental?: boolean; // property only — turns on the per-property cashflow view
+  purchasePrice?: number;
+  purchaseDate?: IsoDate;
+  linkedAccountId?: AccountId; // mortgage only — the property it encumbers
 }
 
 export type CategoryGroup =
@@ -77,6 +84,7 @@ export interface Transaction {
   tags?: string[];
   notes?: string;
   runningTotal?: number;
+  propertyId?: AccountId; // which property this money belongs to — editable metadata, not a bank fact
 }
 
 export interface InvestmentSnapshot {

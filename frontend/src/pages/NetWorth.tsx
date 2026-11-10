@@ -18,9 +18,9 @@ import { netWorth, netWorthByKind, netWorthTrend } from '../lib/kpi';
 import { cad, cadK, deltaPct, monthLabelShort } from '../lib/format';
 import { MoneyCell } from '../components/shared/MoneyCell';
 
-const BUCKET_ORDER = ['cash', 'investments', 'liabilities'] as const;
-const BUCKET_COLOR = { cash: '#60a5fa', investments: '#34d399', liabilities: '#f87171' };
-const BUCKET_LABEL = { cash: 'Cash', investments: 'Investments', liabilities: 'Liabilities' };
+const BUCKET_ORDER = ['cash', 'investments', 'property', 'liabilities'] as const;
+const BUCKET_COLOR = { cash: '#60a5fa', investments: '#34d399', property: '#2dd4bf', liabilities: '#f87171' };
+const BUCKET_LABEL = { cash: 'Cash', investments: 'Investments', property: 'Property', liabilities: 'Liabilities' };
 
 export function NetWorth() {
   const fixtures = useAppStore((s) => s.fixtures)!;
@@ -89,6 +89,7 @@ export function NetWorth() {
                   formatter={(v: number) => cad(v, true)}
                   labelFormatter={(l) => monthLabelShort(l as string)}
                 />
+                <Area type="monotone" dataKey="property" stackId="1" stroke={BUCKET_COLOR.property} fill="url(#g-property)" />
                 <Area type="monotone" dataKey="investments" stackId="1" stroke={BUCKET_COLOR.investments} fill="url(#g-investments)" />
                 <Area type="monotone" dataKey="cash" stackId="1" stroke={BUCKET_COLOR.cash} fill="url(#g-cash)" />
                 <Area type="monotone" dataKey="liabilities" stackId="2" stroke={BUCKET_COLOR.liabilities} fill="url(#g-liabilities)" />

@@ -22,6 +22,7 @@ const GROUPS = [
     submitLabel: 'Create card', defaultKind: 'credit_card' as AccountKind,
   },
   { key: 'investments', label: 'Investment accounts', addLabel: null, submitLabel: null, defaultKind: null },
+  { key: 'property', label: 'Property & mortgages', addLabel: null, submitLabel: null, defaultKind: null },
 ] as const;
 
 type GroupKey = (typeof GROUPS)[number]['key'];
@@ -53,10 +54,11 @@ export function Accounts() {
     if (!prev || t.date > prev) lastTxByAcc.set(t.accountId, t.date);
   }
 
-  const groups: Record<GroupKey, Account[]> = { cash: [], credit: [], investments: [] };
+  const groups: Record<GroupKey, Account[]> = { cash: [], credit: [], investments: [], property: [] };
   for (const acc of fixtures.accounts) {
     if (acc.kind === 'chequing' || acc.kind === 'savings' || acc.kind === 'cash') groups.cash.push(acc);
     else if (acc.kind === 'credit_card') groups.credit.push(acc);
+    else if (acc.kind === 'property' || acc.kind === 'mortgage') groups.property.push(acc);
     else groups.investments.push(acc);
   }
 
@@ -117,7 +119,9 @@ export function Accounts() {
             <p className="text-sm text-ink-dim">
               {key === 'investments'
                 ? 'No investment accounts yet.'
-                : `No ${label.toLowerCase()} yet. ${addLabel} to import its statements.`}
+                : key === 'property'
+                  ? 'No properties or mortgages yet.'
+                  : `No ${label.toLowerCase()} yet. ${addLabel} to import its statements.`}
             </p>
           )}
 
@@ -125,7 +129,9 @@ export function Accounts() {
             {groups[key].map((acc) => {
               const balance = balanceByAcc.get(acc.id) ?? 0;
               const lastTx = lastTxByAcc.get(acc.id);
-              const isLiability = acc.kind === 'credit_card';
+              // The server derives the flag (credit cards and mortgages are always
+              // liabilities), so the payload — not a kind check — is the authority.
+              const isLiability = acc.isLiability ?? false;
               return (
                 <div key={acc.id} className="bg-bg-elev border border-line rounded-lg p-4">
                   <div className="flex items-start justify-between">
@@ -144,6 +150,10 @@ export function Accounts() {
                   {key === 'investments' ? (
                     <div className="text-xs text-ink-dim mt-2">
                       <Link className="hover:text-ink underline" to="/settings">Edit in Settings</Link>
+                    </div>
+                  ) : key === 'property' ? (
+                    <div className="text-xs text-ink-dim mt-2">
+                      <Link className="hover:text-ink underline" to="/properties">Manage on Properties page</Link>
                     </div>
                   ) : (
                     <div className="text-xs mt-2">

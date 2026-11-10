@@ -6,6 +6,10 @@ import uuid
 # kinds served to the frontend (must stay within the AccountKind union)
 BANK_KINDS = {"chequing", "savings", "credit_card", "cash"}
 INVESTMENT_KINDS = {"tfsa", "rrsp", "resp", "fhsa", "dcpp", "non_registered", "crypto"}
+# Real estate: a property is an asset and a mortgage a liability, both valued by
+# snapshots (latest = market value / outstanding principal). Deliberately neither bank
+# (no openingBalances entry, no cash math) nor investment (no allocation/returns).
+PROPERTY_KINDS = {"property", "mortgage"}
 
 # free-text account_type -> a legal AccountKind. Unknown types fall back to non_registered.
 KIND_MAP = {
@@ -32,6 +36,13 @@ KIND_MAP = {
     "savings": "savings",
     "credit_card": "credit_card",
     "creditcard": "credit_card",
+    # Real estate. Without these, round-tripping the generated investments.csv (which
+    # writes account_type = kind) would recreate property/mortgage rows as non_registered.
+    "property": "property",
+    "house": "property",
+    "real estate": "property",
+    "real_estate": "property",
+    "mortgage": "mortgage",
 }
 
 CONTRIBUTION_KINDS = {"tfsa", "rrsp", "resp", "fhsa"}
@@ -83,6 +94,7 @@ DEFAULT_CATEGORIES: list[dict] = [
     {"id": "dividends", "name": "Dividends", "group": "income"},
     {"id": "tax_refund", "name": "Tax Refund", "group": "income"},
     {"id": "ccb", "name": "Canada Child Benefit", "group": "income"},
+    {"id": "rental_income", "name": "Rental Income", "group": "income"},
     {"id": "misc_income", "name": "Misc Income", "group": "income"},
     # fallback for anything auto-categorization can't place
     {"id": "unclassified", "name": "Unclassified", "group": "lifestyle"},

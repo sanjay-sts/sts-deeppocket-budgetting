@@ -16,10 +16,17 @@ import type {
 } from '../types';
 import { daysInMonth, monthKey } from './format';
 
+// The household's primary goal is its savings rate; screens compare against this.
+export const SAVINGS_RATE_TARGET = 0.3;
+
 export interface MonthTotals {
   ym: string;
   income: number;
   expense: number;
+  /** Money moved into savings-bucket categories (e.g. Investments) — saved, not spent. */
+  invested: number;
+  /** Everything that left: spending plus money moved into investments (`expense + invested`). */
+  totalExpense: number;
   net: number;
   savingsRate: number;
 }
@@ -39,11 +46,19 @@ function catIndex(categories: Category[]): Map<CategoryId, Category> {
   return new Map(categories.map((c) => [c.id, c]));
 }
 
+// A savings-bucket category (Investments) moves money into savings — counting it as
+// spending would make every contribution *lower* the savings rate.
+function isSaving(t: Transaction, cats: Map<CategoryId, Category>): boolean {
+  if (t.isTransfer) return false;
+  return cats.get(t.categoryId)?.bucket503020 === 'savings' && t.amount < 0;
+}
+
 function isSpend(t: Transaction, cats: Map<CategoryId, Category>): boolean {
   if (t.isTransfer) return false;
   const c = cats.get(t.categoryId);
   if (!c) return false;
   if (c.group === 'transfers' || c.group === 'income') return false;
+  if (c.bucket503020 === 'savings') return false;
   return t.amount < 0;
 }
 
@@ -63,12 +78,15 @@ export function monthTotals(fixtures: Fixtures): MonthTotals[] {
     const txs = m.get(ym)!;
     const income = txs.reduce((acc, t) => (isIncome(t, cats) ? acc + t.amount : acc), 0);
     const expense = txs.reduce((acc, t) => (isSpend(t, cats) ? acc + -t.amount : acc), 0);
+    const invested = txs.reduce((acc, t) => (isSaving(t, cats) ? acc + -t.amount : acc), 0);
     const net = income - expense;
     const savingsRate = income > 0 ? net / income : 0;
     out.push({
       ym,
       income: round2(income),
       expense: round2(expense),
+      invested: round2(invested),
+      totalExpense: round2(expense + invested),
       net: round2(net),
       savingsRate,
     });
@@ -81,6 +99,8 @@ export function monthTotalsFor(fixtures: Fixtures, ym: string): MonthTotals {
     ym,
     income: 0,
     expense: 0,
+    invested: 0,
+    totalExpense: 0,
     net: 0,
     savingsRate: 0,
   };
@@ -204,31 +224,55 @@ export function accountReturns(snapshots: InvestmentSnapshot[], accountId: strin
 export interface NetWorthBreakdown {
   cash: number;
   investments: number;
+  property: number;
   liabilities: number;
   total: number;
-  byAccount: { accountId: string; value: number; bucket: 'cash' | 'investments' | 'liabilities' }[];
+  byAccount: { accountId: string; value: number; bucket: 'cash' | 'investments' | 'property' | 'liabilities' }[];
+}
+
+// Snapshots are shared by three account families, split by the owning account:
+// property kind → property bucket, liability accounts (mortgages) → debt to subtract,
+// everything else → investments. Credit cards stay transaction-derived — they never
+// carry snapshots, so a card can't be double-counted here.
+function splitSnapshots(fixtures: Fixtures, snaps: InvestmentSnapshot[]) {
+  const accById = new Map(fixtures.accounts.map((a) => [a.id, a]));
+  const investments: InvestmentSnapshot[] = [];
+  const property: InvestmentSnapshot[] = [];
+  const debt: InvestmentSnapshot[] = [];
+  for (const s of snaps) {
+    const acc = accById.get(s.accountId);
+    if (acc?.kind === 'property') property.push(s);
+    else if (acc?.isLiability) debt.push(s);
+    else investments.push(s);
+  }
+  return { investments, property, debt };
 }
 
 export function netWorth(fixtures: Fixtures): NetWorthBreakdown {
   const cashBalances = latestCashBalances(fixtures);
   const ccOwed = latestCreditCardOwing(fixtures);
-  const latestInv = latestInvestmentSnapshot(fixtures);
+  const split = splitSnapshots(fixtures, latestInvestmentSnapshot(fixtures));
 
   const cash = cashBalances.reduce((a, b) => a + b.balance, 0);
-  const investments = latestInv.reduce((a, s) => a + s.amount, 0);
-  const liabilities = ccOwed.reduce((a, b) => a + b.balance, 0);
+  const investments = split.investments.reduce((a, s) => a + s.amount, 0);
+  const property = split.property.reduce((a, s) => a + s.amount, 0);
+  const liabilities = ccOwed.reduce((a, b) => a + b.balance, 0)
+    + split.debt.reduce((a, s) => a + s.amount, 0);
 
   const byAccount: NetWorthBreakdown['byAccount'] = [
     ...cashBalances.map((b) => ({ accountId: b.accountId, value: b.balance, bucket: 'cash' as const })),
-    ...latestInv.map((s) => ({ accountId: s.accountId, value: s.amount, bucket: 'investments' as const })),
+    ...split.investments.map((s) => ({ accountId: s.accountId, value: s.amount, bucket: 'investments' as const })),
+    ...split.property.map((s) => ({ accountId: s.accountId, value: s.amount, bucket: 'property' as const })),
     ...ccOwed.map((b) => ({ accountId: b.accountId, value: -b.balance, bucket: 'liabilities' as const })),
+    ...split.debt.map((s) => ({ accountId: s.accountId, value: -s.amount, bucket: 'liabilities' as const })),
   ];
 
   return {
     cash: round2(cash),
     investments: round2(investments),
+    property: round2(property),
     liabilities: round2(liabilities),
-    total: round2(cash + investments - liabilities),
+    total: round2(cash + investments + property - liabilities),
     byAccount,
   };
 }
@@ -244,13 +288,13 @@ export interface KindBreakdownRow {
 
 const KIND_ORDER: AccountKind[] = [
   'chequing', 'savings', 'cash', 'tfsa', 'rrsp', 'resp', 'fhsa', 'dcpp',
-  'non_registered', 'crypto', 'credit_card',
+  'non_registered', 'crypto', 'property', 'credit_card', 'mortgage',
 ];
 const KIND_LABELS: Record<AccountKind, string> = {
   chequing: 'Chequing', savings: 'Savings', cash: 'Cash',
   tfsa: 'TFSA', rrsp: 'RRSP', resp: 'RESP', fhsa: 'FHSA',
   dcpp: 'DCPP pension', non_registered: 'Non-registered', crypto: 'Crypto',
-  credit_card: 'Credit card debt',
+  property: 'Property', credit_card: 'Credit card debt', mortgage: 'Mortgage',
 };
 
 export function netWorthByKind(fixtures: Fixtures): KindBreakdownRow[] {
@@ -274,6 +318,7 @@ export interface NetWorthPoint {
   ym: string;
   cash: number;
   investments: number;
+  property: number;
   liabilities: number;
   total: number;
 }
@@ -308,21 +353,73 @@ export function netWorthTrend(fixtures: Fixtures): NetWorthPoint[] {
     const ccDelta = fixtures.transactions
       .filter((t) => ccAccountIds.has(t.accountId) && monthKey(t.date) <= ym)
       .reduce((a, t) => a + t.amount, 0);
-    const liabilities = Math.max(0, ccOpening - ccDelta);
+    // The zero-clamp is a per-card overpayment guard; the mortgage principal added
+    // below must never be swallowed by it.
+    const ccOwed = Math.max(0, ccOpening - ccDelta);
 
-    // Investments = sum of latest snapshot for this month per account
-    const thisMonthSnaps = fixtures.investments.filter((s) => monthKey(s.date) === ym);
-    const investments = thisMonthSnaps.reduce((a, s) => a + s.amount, 0);
+    // Latest snapshot per account within this month — hand-entered valuations aren't
+    // guaranteed to be one-per-month, and summing two would double-count the asset.
+    const latestByAcc = new Map<string, InvestmentSnapshot>();
+    for (const s of [...fixtures.investments]
+      .filter((s) => monthKey(s.date) === ym)
+      .sort((a, b) => a.date.localeCompare(b.date))) {
+      latestByAcc.set(s.accountId, s);
+    }
+    const split = splitSnapshots(fixtures, [...latestByAcc.values()]);
+    const investments = split.investments.reduce((a, s) => a + s.amount, 0);
+    const property = split.property.reduce((a, s) => a + s.amount, 0);
+    const liabilities = ccOwed + split.debt.reduce((a, s) => a + s.amount, 0);
 
     points.push({
       ym,
       cash: round2(cash),
       investments: round2(investments),
+      property: round2(property),
       liabilities: round2(liabilities),
-      total: round2(cash + investments - liabilities),
+      total: round2(cash + investments + property - liabilities),
     });
   }
   return points;
+}
+
+// -------------------- Rental property cashflow --------------------
+// Money in vs money out among transactions tagged to a property, by month. This is a
+// CASHFLOW statement, not profit: the full mortgage payment counts as outflow (snapshots
+// don't tell us its interest/principal split), and transfer-flagged rows stay in — a
+// payment someone marked transfer is still real cash leaving the property. Duplicates
+// are excluded like everywhere else.
+
+export interface PropertyCashflowPoint {
+  ym: string;
+  cashIn: number;
+  cashOut: number;
+  net: number;
+}
+
+export function propertyCashflow(fixtures: Fixtures, propertyId: string): PropertyCashflowPoint[] {
+  const byMonth = new Map<string, { cashIn: number; cashOut: number }>();
+  for (const t of fixtures.transactions) {
+    if (t.propertyId !== propertyId || t.isDuplicate) continue;
+    const ym = monthKey(t.date);
+    const m = byMonth.get(ym) ?? { cashIn: 0, cashOut: 0 };
+    if (t.amount > 0) m.cashIn += t.amount;
+    else m.cashOut += -t.amount;
+    byMonth.set(ym, m);
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, m]) => ({
+      ym,
+      cashIn: round2(m.cashIn),
+      cashOut: round2(m.cashOut),
+      net: round2(m.cashIn - m.cashOut),
+    }));
+}
+
+export function sumCashflow(points: PropertyCashflowPoint[]): { cashIn: number; cashOut: number; net: number } {
+  const cashIn = points.reduce((a, p) => a + p.cashIn, 0);
+  const cashOut = points.reduce((a, p) => a + p.cashOut, 0);
+  return { cashIn: round2(cashIn), cashOut: round2(cashOut), net: round2(cashIn - cashOut) };
 }
 
 // -------------------- Category KPIs --------------------

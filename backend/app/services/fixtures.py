@@ -41,6 +41,14 @@ def _account_out(
         out["beneficiaryIds"] = beneficiary_ids
     if a.is_liability:
         out["isLiability"] = True
+    if a.is_rental:
+        out["isRental"] = True
+    if a.purchase_price is not None:
+        out["purchasePrice"] = a.purchase_price
+    if a.purchase_date:
+        out["purchaseDate"] = a.purchase_date
+    if a.linked_account_id:
+        out["linkedAccountId"] = a.linked_account_id
     return out
 
 
@@ -110,6 +118,8 @@ def _transaction_out(t: Transaction) -> dict:
         out["tags"] = json.loads(t.tags)
     if t.running_total is not None:
         out["runningTotal"] = t.running_total
+    if t.property_id:
+        out["propertyId"] = t.property_id
     return out
 
 

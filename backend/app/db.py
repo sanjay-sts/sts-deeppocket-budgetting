@@ -13,8 +13,14 @@ def init_db() -> None:
         for table, column, ddl in (
             ("contribution", "recurring_id", "ALTER TABLE contribution ADD COLUMN recurring_id VARCHAR"),
             ("person", "gross_income", "ALTER TABLE person ADD COLUMN gross_income FLOAT"),
+            ("account", "is_rental", "ALTER TABLE account ADD COLUMN is_rental BOOLEAN"),
+            ("account", "purchase_price", "ALTER TABLE account ADD COLUMN purchase_price FLOAT"),
+            ("account", "purchase_date", "ALTER TABLE account ADD COLUMN purchase_date VARCHAR"),
+            ("account", "linked_account_id", "ALTER TABLE account ADD COLUMN linked_account_id VARCHAR"),
+            # "transaction" is an SQL keyword — quoted everywhere it appears in DDL.
+            ("transaction", "property_id", 'ALTER TABLE "transaction" ADD COLUMN property_id VARCHAR'),
         ):
-            cols = [r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})")]
+            cols = [r[1] for r in conn.exec_driver_sql(f'PRAGMA table_info("{table}")')]
             if cols and column not in cols:
                 conn.exec_driver_sql(ddl)
         conn.commit()

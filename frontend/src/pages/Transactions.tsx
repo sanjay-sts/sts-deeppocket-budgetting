@@ -31,6 +31,7 @@ export function Transactions() {
 
   const accById = new Map(fixtures.accounts.map((a) => [a.id, a]));
   const catById = new Map(fixtures.categories.map((c) => [c.id, c]));
+  const properties = fixtures.accounts.filter((a) => a.kind === 'property');
   const months = useMemo(
     () => [...new Set(fixtures.transactions.map((t) => t.date.slice(0, 7)))].sort().reverse(),
     [fixtures],
@@ -104,7 +105,8 @@ export function Transactions() {
           <FilterSelect value={accountFilter} onChange={setAccountFilter} label="Account">
             <option value="all">All accounts</option>
             {fixtures.accounts
-              .filter((a) => a.kind !== 'tfsa' && a.kind !== 'rrsp' && a.kind !== 'resp' && a.kind !== 'fhsa' && a.kind !== 'dcpp' && a.kind !== 'crypto')
+              .filter((a) => a.kind !== 'tfsa' && a.kind !== 'rrsp' && a.kind !== 'resp' && a.kind !== 'fhsa' && a.kind !== 'dcpp' && a.kind !== 'crypto'
+                && a.kind !== 'property' && a.kind !== 'mortgage')
               .map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -192,6 +194,31 @@ export function Transactions() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {properties.length > 0 && (
+              <select
+                defaultValue="__unset"
+                onChange={(e) => {
+                  const propertyId = e.target.value;
+                  e.target.value = '__unset';
+                  if (propertyId === '__unset') return;
+                  const name = accById.get(propertyId)?.name;
+                  const ids = [...selected];
+                  void applyBulk(async () => {
+                    const r = await bulkUpdate({ ids, propertyId });
+                    return propertyId
+                      ? `Tagged ${r.updated} transaction${r.updated === 1 ? '' : 's'} to ${name}`
+                      : `Cleared the property tag on ${r.updated} transaction${r.updated === 1 ? '' : 's'}`;
+                  });
+                }}
+                className="bg-bg border border-line rounded-md px-2 py-1 text-xs text-ink focus:outline-none focus:border-brand"
+              >
+                <option value="__unset">Tag property…</option>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+                <option value="">— clear tag —</option>
+              </select>
+            )}
             <Button
               variant="ghost"
               onClick={() => {
@@ -313,6 +340,7 @@ export function Transactions() {
                           accounts={fixtures.accounts.filter((a) =>
                             ['cash', 'chequing', 'savings', 'credit_card'].includes(a.kind),
                           )}
+                          properties={properties}
                           onSave={async (patch) => {
                             await editTransaction(t.id, patch);
                             setExpandedId(null);
@@ -343,17 +371,20 @@ export function Transactions() {
 function TxEditor({
   tx,
   accounts,
+  properties,
   onSave,
   onDelete,
 }: {
   tx: import('../types').Transaction;
   accounts: { id: string; name: string }[];
+  properties: { id: string; name: string }[];
   onSave: (patch: import('../data/api').TransactionPatchInput) => Promise<void>;
   onDelete?: () => Promise<void>;
 }) {
   const manual = tx.source === 'manual';
   const [notes, setNotes] = useState(tx.notes ?? '');
   const [tags, setTags] = useState((tx.tags ?? []).join(', '));
+  const [propertyId, setPropertyId] = useState(tx.propertyId ?? '');
   const [isTransfer, setIsTransfer] = useState(tx.isTransfer ?? false);
   const [isDuplicate, setIsDuplicate] = useState(tx.isDuplicate ?? false);
   const [date, setDate] = useState(tx.date);
@@ -402,6 +433,17 @@ function TxEditor({
           Tags
           <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="comma, separated" className={`${inputClass} w-48`} />
         </label>
+        {properties.length > 0 && (
+          <label className="flex items-center gap-2 text-ink-muted">
+            Property
+            <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)} className={inputClass}>
+              <option value="">— none —</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-1.5 text-ink-muted">
           <input type="checkbox" checked={isTransfer} onChange={(e) => setIsTransfer(e.target.checked)} />
           Transfer
@@ -420,6 +462,8 @@ function TxEditor({
                 tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
                 isTransfer,
                 isDuplicate,
+                propertyId, // '' clears the tag server-side
+
                 ...(manual
                   ? { date, merchant: merchant.trim(), amount: amountNum, accountId }
                   : {}),

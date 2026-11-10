@@ -16,7 +16,7 @@ def test_purge_investments_keeps_banking(client, engine):
     assert r.status_code == 200
     with Session(engine) as s:
         assert s.get(Account, "chequing_1") is not None
-        assert len(s.exec(select(Transaction)).all()) == 864
+        assert len(s.exec(select(Transaction)).all()) == 894
         kinds = {a.kind for a in s.exec(select(Account)).all()}
         assert kinds <= {"chequing", "savings", "credit_card", "cash"}
 
@@ -40,5 +40,5 @@ def test_purge_demo_restores_everything(client, engine):
     r = client.post("/api/admin/purge", json={"mode": "demo"})
     assert r.status_code == 200
     with Session(engine) as s:
-        assert len(s.exec(select(Transaction)).all()) == 864
+        assert len(s.exec(select(Transaction)).all()) == 894
         assert s.get(Account, "chequing_1") is not None

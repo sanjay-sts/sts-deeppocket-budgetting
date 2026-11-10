@@ -109,6 +109,11 @@ describe('m4 actions', () => {
     expect(api.loadFixtures).toHaveBeenCalled();
   });
 
+  it('bulkUpdateTransactions passes a property tag through the seam untouched', async () => {
+    await useAppStore.getState().bulkUpdateTransactions({ ids: ['t1'], propertyId: 'prop_1' });
+    expect(api.bulkUpdateTransactions).toHaveBeenCalledWith({ ids: ['t1'], propertyId: 'prop_1' });
+  });
+
   it('bulkDeleteTransactions returns the summary incl. skipped bank rows', async () => {
     const r = await useAppStore.getState().bulkDeleteTransactions(['m1', 'b1']);
     expect(r.deleted).toBe(1);

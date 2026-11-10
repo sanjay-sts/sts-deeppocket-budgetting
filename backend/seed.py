@@ -10,7 +10,7 @@ import json
 from sqlmodel import Session, select
 
 from app.config import FIXTURES_PATH
-from app.constants import BANK_KINDS, INVESTMENT_KINDS, new_id
+from app.constants import BANK_KINDS, INVESTMENT_KINDS, PROPERTY_KINDS, new_id
 from app.db import engine, init_db
 from app.models import (
     Person, Account, AccountOwner, AccountBeneficiary, InvestmentSnapshot, Contribution,
@@ -42,12 +42,14 @@ def seed(session: Session, investments: str = "demo") -> None:
     session.commit()
 
     if investments == "empty":
-        # Drop only the investment domain; banking data (accounts in BANK_KINDS and
-        # their transactions) is not part of the 'empty investments' story.
+        # Drop only the valuation domain — investment AND property/mortgage accounts
+        # (both live off snapshots); banking data (accounts in BANK_KINDS and their
+        # transactions) is not part of the 'empty investments' story.
         for model in (Contribution, InvestmentSnapshot):
             for row in session.exec(select(model)).all():
                 session.delete(row)
-        inv_ids = {a.id for a in session.exec(select(Account)).all() if a.kind in INVESTMENT_KINDS}
+        inv_ids = {a.id for a in session.exec(select(Account)).all()
+                   if a.kind in INVESTMENT_KINDS | PROPERTY_KINDS}
         for model in (AccountOwner, AccountBeneficiary):
             for row in session.exec(select(model)).all():
                 if row.account_id in inv_ids:
@@ -57,6 +59,31 @@ def seed(session: Session, investments: str = "demo") -> None:
         session.commit()
         _seed_banking(session, base)
         return
+
+    # Property/mortgage accounts: like bank accounts they keep their fixture display
+    # name, but their value lives in snapshots (seeded below with the investment ones),
+    # so there is no opening balance to map.
+    for a in base["accounts"]:
+        if a["kind"] not in PROPERTY_KINDS:
+            continue
+        _upsert(session, Account, a["id"], {
+            "institution": a["institution"],
+            "account_type": a["kind"],
+            "kind": a["kind"],
+            "custom_name": a["name"],
+            "is_liability": a.get("isLiability", False),
+            "is_rental": a.get("isRental"),
+            "purchase_price": a.get("purchasePrice"),
+            "purchase_date": a.get("purchaseDate"),
+            "linked_account_id": a.get("linkedAccountId"),
+        })
+        for row in session.exec(
+            select(AccountOwner).where(AccountOwner.account_id == a["id"])
+        ).all():
+            session.delete(row)
+        for owner in a["ownerIds"]:
+            session.add(AccountOwner(account_id=a["id"], person_id=owner))
+    session.commit()
 
     for a in base["accounts"]:
         if a["kind"] not in INVESTMENT_KINDS:
@@ -183,6 +210,7 @@ def _seed_banking(session: Session, base: dict) -> None:
             "notes": t.get("notes"),
             "tags": json.dumps(t["tags"]) if t.get("tags") else None,
             "running_total": t.get("runningTotal"),
+            "property_id": t.get("propertyId"),
         })
     session.commit()
 

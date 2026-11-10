@@ -30,6 +30,12 @@ class AccountCreate(BaseModel):
     # amount OWED (positive) for a credit card — see services/opening_balance.py. A statement
     # carrying a running total overwrites whatever is set here.
     openingBalance: Optional[float] = None
+    # Real-estate fields (property/mortgage kinds). linkedAccountId must reference an
+    # existing property account (validated in the router).
+    isRental: Optional[bool] = None
+    purchasePrice: Optional[float] = None
+    purchaseDate: Optional[str] = None
+    linkedAccountId: Optional[str] = None
 
 
 class AccountUpdate(BaseModel):
@@ -41,6 +47,12 @@ class AccountUpdate(BaseModel):
     personIds: Optional[list[str]] = None
     beneficiaryIds: Optional[list[str]] = None
     openingBalance: Optional[float] = None
+    # Nullable AND clearable (model_fields_set in the router distinguishes "leave
+    # alone" from "clear"), so a sold rental or discharged mortgage can drop its fields.
+    isRental: Optional[bool] = None
+    purchasePrice: Optional[float] = None
+    purchaseDate: Optional[str] = None
+    linkedAccountId: Optional[str] = None
 
 
 class SnapshotUpsert(BaseModel):
@@ -109,6 +121,7 @@ class TransactionPatch(BaseModel):
     isDuplicate: Optional[bool] = None
     notes: Optional[str] = None      # "" clears
     tags: Optional[list[str]] = None  # [] clears
+    propertyId: Optional[str] = None  # "" clears; must reference a property account
     # manual-only bank facts:
     date: Optional[str] = None
     merchant: Optional[str] = None
@@ -177,6 +190,7 @@ class TransactionBulkUpdate(BaseModel):
     categoryId: Optional[str] = None
     isTransfer: Optional[bool] = None
     isDuplicate: Optional[bool] = None
+    propertyId: Optional[str] = None  # "" clears; must reference a property account
 
 
 class TransactionBulkDelete(BaseModel):
